@@ -53,7 +53,18 @@ export function SeriesPage() {
     // Check cache first
     const cached = getCachedContent(serverId, 'series', categoryId);
     if (cached && cached.length > 0) {
-      setSeries(cached as Series[]);
+      const cachedSeries = cached as Series[];
+      setSeries(cachedSeries);
+
+      // Also update the app store so Detail page can access series
+      const currentSeries = useAppStore.getState().series;
+      const newSeries = [...currentSeries];
+      cachedSeries.forEach((s) => {
+        if (!newSeries.find((existing) => existing.id === s.id)) {
+          newSeries.push(s);
+        }
+      });
+      useAppStore.getState().setSeries(newSeries);
       return;
     }
 
@@ -69,6 +80,16 @@ export function SeriesPage() {
       const seriesList = await api.getSeries(categoryId);
       const transformedSeries = api.transformSeriesList(seriesList, serverFavorites.series);
       setSeries(transformedSeries);
+
+      // Also update the app store so Detail page can access series
+      const currentSeries = useAppStore.getState().series;
+      const newSeries = [...currentSeries];
+      transformedSeries.forEach((s) => {
+        if (!newSeries.find((existing) => existing.id === s.id)) {
+          newSeries.push(s);
+        }
+      });
+      useAppStore.getState().setSeries(newSeries);
 
       // Cache the content
       setCachedContent(serverId, 'series', categoryId, transformedSeries);
