@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore, useSettingsStore } from '../store';
 import { getApi } from '../api';
 import { copyToClipboard } from '../utils';
+import { invoke } from '@tauri-apps/api/core';
 import type { Movie, Series, Episode, ContentType } from '../types';
 
 export function DetailPage() {
@@ -17,6 +18,7 @@ export function DetailPage() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const serverId = currentServer?.id || '';
+  const { addToWatchHistory } = useSettingsStore();
   const contentType = type as ContentType;
   const itemId = parseInt(id || '0', 10);
 
@@ -56,7 +58,36 @@ export function DetailPage() {
     loadEpisodes();
   }, [contentType, itemId, selectedSeason]);
 
-  const handlePlay = (episodeId?: number) => {
+  const handlePlay = async (episodeId?: number) => {
+    const api = getApi();
+    if (!api) return;
+    let streamUrl: string;
+    let title: string;
+    if (contentType === 'movie') {
+      streamUrl = api.buildVodStreamUrl(itemId, 'm3u8');
+      title = item?.name ?? 'Movie';
+    } else if (episodeId) {
+      streamUrl = api.buildSeriesStreamUrl(episodeId, 'm3u8');
+      const ep = episodes.find((e) => e.id === episodeId);
+      title = ep ? `${item?.name ?? 'Series'} – ${ep.title}` : item?.name ?? 'Episode';
+    } else {
+      return;
+    }
+    try {
+      await invoke('open_video_window', { title, streamUrl });
+      if (serverId) {
+        addToWatchHistory(serverId, {
+          contentType,
+          contentId: contentType === 'movie' ? itemId : episodeId!,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to open video window:', err);
+    }
+  };
+
+  const handleAdditionalPlayers = (episodeId?: number) => {
     if (contentType === 'movie') {
       navigate(`/player/movie/${itemId}`);
     } else if (episodeId) {
@@ -154,15 +185,26 @@ export function DetailPage() {
             {/* Action Buttons */}
             <div className="flex gap-3 mb-6">
               {contentType === 'movie' && (
-                <button
-                  onClick={() => handlePlay()}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  Play
-                </button>
+                <>
+                  <button
+                    onClick={() => handlePlay()}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Play
+                  </button>
+                  <button
+                    onClick={() => handleAdditionalPlayers()}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Additional Players
+                  </button>
+                </>
               )}
 
               <button
@@ -247,7 +289,7 @@ export function DetailPage() {
                         <p className="text-sm text-gray-400">{episode.duration}</p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <button
                         onClick={() => handleCopyUrl(episode.id)}
                         className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
@@ -271,6 +313,13 @@ export function DetailPage() {
                         <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M8 5v14l11-7z" />
                         </svg>
+                      </button>
+                      <button
+                        onClick={() => handleAdditionalPlayers(episode.id)}
+                        className="px-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                        title="Additional Players"
+                      >
+                        More
                       </button>
                     </div>
                   </div>

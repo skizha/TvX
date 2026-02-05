@@ -64,13 +64,3 @@ body {
   outline-offset: 2px;
 }
 
-/* Video.js overrides for dark theme */
-.video-js {
-  background-color: #000;
-}
-
-.vjs-big-play-button {
-  background-color: rgba(59, 130, 246, 0.8) !important;
-  border: none !important;
-  border-radius: 50% !important;
-}

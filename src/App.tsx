@@ -8,6 +8,7 @@ import {
   SeriesPage,
   DetailPage,
   PlayerPage,
+  VideoWindowPage,
   SearchPage,
   FavoritesPage,
   SettingsPage,
@@ -58,6 +59,9 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Video window (no layout, no auth – opened as second Tauri window) */}
+        <Route path="/video-window" element={<VideoWindowPage />} />
 
         {/* Catch all - redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />

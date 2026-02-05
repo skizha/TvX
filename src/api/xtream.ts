@@ -236,7 +236,7 @@ export class XtreamApi {
   // ==================== Stream URL Builders ====================
 
   buildLiveStreamUrl(streamId: number, extension: string = 'm3u8'): string {
-    return `${this.getStreamBaseUrl()}/${this.server.username}/${this.server.password}/${streamId}.${extension}`;
+    return `${this.getStreamBaseUrl()}/live/${this.server.username}/${this.server.password}/${streamId}.${extension}`;
   }
 
   buildVodStreamUrl(streamId: number, extension: string): string {
@@ -249,7 +249,7 @@ export class XtreamApi {
 
   // URL with masked credentials (for display)
   buildLiveStreamUrlMasked(streamId: number, extension: string = 'm3u8'): string {
-    return `${this.getStreamBaseUrl()}/***/***/***/${streamId}.${extension}`;
+    return `${this.getStreamBaseUrl()}/live/***/***/***/${streamId}.${extension}`;
   }
 
   buildVodStreamUrlMasked(streamId: number, extension: string): string {

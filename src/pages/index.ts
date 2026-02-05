@@ -4,6 +4,7 @@ export * from './Movies';
 export * from './Series';
 export * from './Detail';
 export * from './Player';
+export * from './VideoWindow';
 export * from './Search';
 export * from './Favorites';
 export * from './Settings';

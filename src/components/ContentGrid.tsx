@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppStore, useSettingsStore } from '../store';
 import { getApi } from '../api';
 import { copyToClipboard } from '../utils';
+import { invoke } from '@tauri-apps/api/core';
 import type { Channel, Movie, Series, ContentType } from '../types';
 
 interface ContentGridProps {
@@ -21,16 +22,39 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
 
   const serverId = currentServer?.id || '';
   const serverFavorites = favorites[serverId]?.[type] || [];
+  const { addToWatchHistory } = useSettingsStore();
 
-  const handleItemClick = (item: Channel | Movie | Series) => {
-    if (onItemClick) {
-      onItemClick(item);
-    } else if (type === 'live') {
-      navigate(`/player/live/${item.id}`);
-    } else {
-      navigate(`/detail/${type}/${item.id}`);
-    }
-  };
+  const handleItemClick = useCallback(
+    async (item: Channel | Movie | Series) => {
+      if (onItemClick) {
+        onItemClick(item);
+        return;
+      }
+      if (type === 'live') {
+        const api = getApi();
+        if (!api) return;
+        const streamUrl = api.buildLiveStreamUrl(item.id, 'm3u8');
+        try {
+          await invoke('open_video_window', {
+            title: item.name,
+            streamUrl,
+          });
+          if (serverId) {
+            addToWatchHistory(serverId, {
+              contentType: 'live',
+              contentId: item.id,
+              timestamp: Date.now(),
+            });
+          }
+        } catch (err) {
+          console.error('Failed to open video window:', err);
+        }
+      } else {
+        navigate(`/detail/${type}/${item.id}`);
+      }
+    },
+    [onItemClick, type, serverId, addToWatchHistory, navigate]
+  );
 
   const handleCopyUrl = useCallback(async (item: Channel | Movie | Series, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -120,9 +144,23 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
         <>
           <div className="fixed inset-0 z-40" onClick={closeContextMenu} />
           <div
-            className="fixed bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 z-50 min-w-[180px] backdrop-blur-xl"
+            className="fixed bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 z-50 min-w-[200px] backdrop-blur-xl"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
+            {(type === 'live' || type === 'movie') && (
+              <button
+                onClick={() => {
+                  navigate(`/player/${type}/${contextMenu!.item.id}`);
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+              >
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Additional Players
+              </button>
+            )}
             <button
               onClick={() => handleCopyUrl(contextMenu.item)}
               className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
