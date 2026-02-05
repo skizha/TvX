@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"where npm\")",
+      "Bash(powershell -Command \"Get-Command npm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell -NoProfile -Command \"Get-Command npm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell -NoProfile -Command \"$env:Path\")",
+      "Bash(/c/Program Files/nodejs/npm --version)",
+      "Bash(/c/Users/sanje/AppData/Roaming/nvm/v22.14.0/npm --version)",
+      "Bash(/c/Users/sanje/AppData/Local/Zed/node/node-v24.11.0-win-x64/npm.cmd --version)",
+      "Bash(export PATH:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss init -p)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(npm ls:*)"
+    ]
+  }
+}
