@@ -41,6 +41,7 @@ export interface Movie {
   plot: string;
   categoryId: number;
   isFavorite: boolean;
+  extension: string; // container extension e.g. mp4, mkv
 }
 
 // Series
@@ -71,6 +72,7 @@ export interface Episode {
   title: string;
   plot: string;
   duration: string;
+  extension: string; // container extension e.g. mp4, mkv
 }
 
 // Unified content item for grids/lists

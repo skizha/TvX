@@ -338,7 +338,17 @@ export const useSettingsStore = create<SettingsState>()(
         const cache = get().contentCache[serverId];
         if (!cache) return null;
         const contentKey = type === 'live' ? 'channels' : type === 'movie' ? 'movies' : 'series';
-        return cache[contentKey][categoryId] || null;
+        const content = cache[contentKey][categoryId] || null;
+
+        // Invalidate movie cache if it's missing the extension field (old cache format)
+        if (type === 'movie' && content && Array.isArray(content) && content.length > 0) {
+          const firstMovie = content[0] as Movie;
+          if (!firstMovie.extension) {
+            return null; // Force refetch
+          }
+        }
+
+        return content;
       },
 
       clearCache: (serverId) =>

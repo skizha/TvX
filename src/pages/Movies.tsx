@@ -53,7 +53,18 @@ export function MoviesPage() {
     // Check cache first
     const cached = getCachedContent(serverId, 'movie', categoryId);
     if (cached && cached.length > 0) {
-      setMovies(cached as Movie[]);
+      const cachedMovies = cached as Movie[];
+      setMovies(cachedMovies);
+
+      // Also update the app store so Detail page can access movies
+      const currentMovies = useAppStore.getState().movies;
+      const newMovies = [...currentMovies];
+      cachedMovies.forEach((movie) => {
+        if (!newMovies.find((m) => m.id === movie.id)) {
+          newMovies.push(movie);
+        }
+      });
+      useAppStore.getState().setMovies(newMovies);
       return;
     }
 
@@ -69,6 +80,16 @@ export function MoviesPage() {
       const vods = await api.getVodStreams(categoryId);
       const transformedMovies = api.transformMovies(vods, serverFavorites.movie);
       setMovies(transformedMovies);
+
+      // Also update the app store so Detail page can access movies
+      const currentMovies = useAppStore.getState().movies;
+      const newMovies = [...currentMovies];
+      transformedMovies.forEach((movie) => {
+        if (!newMovies.find((m) => m.id === movie.id)) {
+          newMovies.push(movie);
+        }
+      });
+      useAppStore.getState().setMovies(newMovies);
 
       // Cache the content
       setCachedContent(serverId, 'movie', categoryId, transformedMovies);

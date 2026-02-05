@@ -47,6 +47,7 @@ export function DetailPage() {
           title: ep.title,
           plot: ep.info?.plot || '',
           duration: ep.info?.duration || '',
+          extension: ep.container_extension || 'mp4',
         })));
       } catch (err) {
         console.error('Failed to load episodes:', err);
@@ -64,11 +65,13 @@ export function DetailPage() {
     let streamUrl: string;
     let title: string;
     if (contentType === 'movie') {
-      streamUrl = api.buildVodStreamUrl(itemId, 'm3u8');
+      const ext = movieItem.extension || 'mp4';
+      streamUrl = api.buildVodStreamUrl(itemId, ext);
       title = item?.name ?? 'Movie';
     } else if (episodeId) {
-      streamUrl = api.buildSeriesStreamUrl(episodeId, 'm3u8');
       const ep = episodes.find((e) => e.id === episodeId);
+      const ext = ep?.extension || 'mp4';
+      streamUrl = api.buildSeriesStreamUrl(episodeId, ext);
       title = ep ? `${item?.name ?? 'Series'} – ${ep.title}` : item?.name ?? 'Episode';
     } else {
       return;
@@ -101,9 +104,12 @@ export function DetailPage() {
 
     let url: string;
     if (contentType === 'movie') {
-      url = api.buildVodStreamUrl(itemId, 'mp4');
+      const ext = movieItem.extension || 'mp4';
+      url = api.buildVodStreamUrl(itemId, ext);
     } else if (episodeId) {
-      url = api.buildSeriesStreamUrl(episodeId, 'mp4');
+      const ep = episodes.find((e) => e.id === episodeId);
+      const ext = ep?.extension || 'mp4';
+      url = api.buildSeriesStreamUrl(episodeId, ext);
     } else {
       return;
     }

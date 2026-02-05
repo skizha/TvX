@@ -22,12 +22,13 @@ export function PlayerPage() {
   const itemId = parseInt(id || '0', 10);
   const serverId = currentServer?.id || '';
 
+  const movie = contentType === 'movie' ? movies.find((m) => m.id === itemId) : null;
+
   const contentInfo = (() => {
     if (contentType === 'live') {
       const channel = channels.find((c) => c.id === itemId);
       return channel ? { name: channel.name, icon: channel.icon } : null;
     } else if (contentType === 'movie') {
-      const movie = movies.find((m) => m.id === itemId);
       return movie ? { name: movie.name, icon: movie.poster } : null;
     } else {
       const s = series.find((s) => s.id === itemId);
@@ -41,10 +42,13 @@ export function PlayerPage() {
     switch (contentType) {
       case 'live':
         return api.buildLiveStreamUrl(itemId, 'm3u8');
-      case 'movie':
-        return api.buildVodStreamUrl(itemId, 'm3u8');
+      case 'movie': {
+        const ext = movie?.extension || 'mp4';
+        return api.buildVodStreamUrl(itemId, ext);
+      }
       case 'series':
-        return api.buildSeriesStreamUrl(itemId, 'm3u8');
+        // Series in Player is for episodes - use mp4 as default (episode ext not available here)
+        return api.buildSeriesStreamUrl(itemId, 'mp4');
       default:
         return '';
     }

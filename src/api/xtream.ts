@@ -302,6 +302,7 @@ export class XtreamApi {
       plot: '',
       categoryId: parseInt(apiVod.category_id, 10),
       isFavorite: favorites.includes(apiVod.stream_id),
+      extension: apiVod.container_extension || 'mp4',
     };
   }
 
