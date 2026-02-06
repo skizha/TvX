@@ -167,3 +167,75 @@ export function useLoadInitialData() {
 
   return { loading, error, loadAll };
 }
+
+const CATEGORY_STEPS: { type: ContentType; label: string }[] = [
+  { type: 'live', label: 'Live TV' },
+  { type: 'movie', label: 'Movies' },
+  { type: 'series', label: 'Series' },
+];
+
+/**
+ * Hook for initial load of all 3 category types (with progress).
+ * Uses cache when available; fetches from API otherwise.
+ */
+export function useLoadInitialCategories() {
+  const [loading, setLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
+
+  const { currentServer, setCategories } = useAppStore();
+  const { getCachedCategories, setCachedCategories } = useSettingsStore();
+
+  const serverId = currentServer?.id ?? '';
+
+  const runInitialLoad = useCallback(async () => {
+    const api = getApi();
+    if (!api || !serverId) return;
+
+    setLoading(true);
+    setProgressPercent(0);
+    setProgressMessage('Preparing…');
+
+    try {
+      for (let i = 0; i < CATEGORY_STEPS.length; i++) {
+        const { type, label } = CATEGORY_STEPS[i];
+        const step = i + 1;
+        const percent = Math.round((step / CATEGORY_STEPS.length) * 100);
+        setProgressMessage(`Loading ${label} categories…`);
+        setProgressPercent(percent);
+
+        const cached = getCachedCategories(serverId, type);
+        if (cached && cached.length > 0) {
+          setCategories(type, cached);
+          continue;
+        }
+
+        let apiCategories;
+        switch (type) {
+          case 'live':
+            apiCategories = await api.getLiveCategories();
+            break;
+          case 'movie':
+            apiCategories = await api.getVodCategories();
+            break;
+          case 'series':
+            apiCategories = await api.getSeriesCategories();
+            break;
+        }
+        const categories = api.transformCategories(apiCategories, type);
+        setCategories(type, categories);
+        if (categories.length > 0) {
+          setCachedCategories(serverId, type, categories);
+        }
+      }
+      setProgressMessage('');
+      setProgressPercent(100);
+    } catch (err) {
+      setProgressMessage('Failed to load categories');
+    } finally {
+      setLoading(false);
+    }
+  }, [serverId, setCategories, getCachedCategories, setCachedCategories]);
+
+  return { loading, progressMessage, progressPercent, runInitialLoad };
+}

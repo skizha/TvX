@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useAppStore } from '../store';
 import { useSettingsStore } from '../store';
 import { GroupManager } from '../components/GroupManager';
 
 export function SettingsPage() {
   const [showGroupManager, setShowGroupManager] = useState(false);
-  const { preferences, setPreferences, servers, removeServer } = useSettingsStore();
+  const [cacheCleared, setCacheCleared] = useState(false);
+  const { currentServer } = useAppStore();
+  const { preferences, setPreferences, servers, removeServer, clearCache } = useSettingsStore();
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -81,6 +84,34 @@ export function SettingsPage() {
               <option value="grid">Grid</option>
               <option value="list">List</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Data & cache */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-white mb-4">Data & cache</h2>
+        <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-white">Clear content cache</p>
+              <p className="text-sm text-gray-400">
+                Remove cached categories and content for the current server. Refresh the app (F5) to see the initial load progress bar again.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (currentServer?.id) {
+                  clearCache(currentServer.id);
+                  setCacheCleared(true);
+                  setTimeout(() => setCacheCleared(false), 2000);
+                }
+              }}
+              disabled={!currentServer?.id}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex-shrink-0"
+            >
+              {cacheCleared ? 'Cleared' : 'Clear cache'}
+            </button>
           </div>
         </div>
       </section>

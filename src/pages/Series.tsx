@@ -37,12 +37,13 @@ export function SeriesPage() {
     const cached = getCachedCategories(serverId, 'series');
     if (cached && cached.length > 0) {
       useAppStore.getState().setCategories('series', cached);
+      setLoadingProgress('');
       return;
     }
 
     // Load from API if not cached
     if (categories.series.length === 0) {
-      setLoadingProgress('Loading categories...');
+      setLoadingProgress('Loading Series categories…');
       loadCategories('series').then(() => {
         // Cache the categories
         const cats = useAppStore.getState().categories.series;
@@ -121,7 +122,7 @@ export function SeriesPage() {
     if (!api) return;
 
     setLoadingContent(true);
-    setLoadingProgress(`Loading series...`);
+    setLoadingProgress('Loading series…');
 
     try {
       const serverFavorites = favorites[serverId] || { live: [], movie: [], series: [] };
@@ -201,7 +202,7 @@ export function SeriesPage() {
     return [...customGroupCategories, ...apiCategories];
   }, [categories.series, serverVisibilityRaw, serverGroups]);
 
-  const loading = loadingContent || loadingCategories;
+  const loading = loadingContent || loadingCategories || loadingProgress !== '';
 
   // Show category selection view
   if (selectedCategoryId === null) {
@@ -214,17 +215,16 @@ export function SeriesPage() {
         </div>
 
         {/* Loading */}
-        {loadingCategories && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-400">{loadingProgress || 'Loading...'}</p>
-            </div>
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 px-4">
+            <div className="w-14 h-14 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-5" />
+            <p className="text-white font-medium text-lg mb-1">{loadingProgress || 'Loading…'}</p>
+            <p className="text-gray-500 text-sm">This may take a moment</p>
           </div>
         )}
 
         {/* Category Grid */}
-        {!loadingCategories && (
+        {!loading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {visibleCategories.map((category) => (
               <CategoryCard
@@ -237,7 +237,7 @@ export function SeriesPage() {
           </div>
         )}
 
-        {!loadingCategories && visibleCategories.length === 0 && (
+        {!loading && visibleCategories.length === 0 && (
           <div className="text-center py-20">
             <p className="text-gray-400">No categories available</p>
           </div>
@@ -299,11 +299,10 @@ export function SeriesPage() {
 
       {/* Loading Progress */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">{loadingProgress || 'Loading...'}</p>
-          </div>
+        <div className="flex flex-col items-center justify-center py-24 px-4">
+          <div className="w-14 h-14 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-5" />
+          <p className="text-white font-medium text-lg mb-1">{loadingProgress || 'Loading…'}</p>
+          <p className="text-gray-500 text-sm">This may take a moment</p>
         </div>
       )}
 
