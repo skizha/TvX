@@ -181,6 +181,7 @@ interface SettingsState {
   getCachedCategories: (serverId: string, type: ContentType) => Category[] | null;
   getCachedContent: (serverId: string, type: ContentType, categoryId: number) => Channel[] | Movie[] | Series[] | null;
   getAllCachedContent: (serverId: string, type: ContentType) => Channel[] | Movie[] | Series[] | null;
+  clearCacheForType: (serverId: string, type: ContentType) => void;
   clearCache: (serverId: string) => void;
 }
 
@@ -441,6 +442,23 @@ export const useSettingsStore = create<SettingsState>()(
         return deduped as Channel[] | Movie[] | Series[];
       },
 
+      clearCacheForType: (serverId, type) =>
+        set((state) => {
+          const cache = state.contentCache[serverId] || { ...emptyCache };
+          const contentKey = type === 'live' ? 'channels' : type === 'movie' ? 'movies' : 'series';
+          return {
+            contentCache: {
+              ...state.contentCache,
+              [serverId]: {
+                ...cache,
+                categories: { ...cache.categories, [type]: [] },
+                [contentKey]: {},
+                lastUpdated: Date.now(),
+              },
+            },
+          };
+        }),
+
       clearCache: (serverId) =>
         set((state) => ({
           contentCache: {
@@ -454,3 +472,42 @@ export const useSettingsStore = create<SettingsState>()(
     }
   )
 );
+
+// Non-persisted refresh state store (survives navigation within the app)
+export interface RefreshStats {
+  liveCategories: number;
+  movieCategories: number;
+  seriesCategories: number;
+  channels: number;
+  movies: number;
+  series: number;
+  lastUpdated: number;
+}
+
+interface RefreshState {
+  isRefreshing: boolean;
+  shouldStop: boolean;
+  progress: string;
+  percent: number;
+  stats: RefreshStats | null;
+
+  startRefresh: () => void;
+  setProgress: (progress: string, percent: number) => void;
+  finishRefresh: (stats: RefreshStats | null) => void;
+  requestStop: () => void;
+  reset: () => void;
+}
+
+export const useRefreshStore = create<RefreshState>()((set) => ({
+  isRefreshing: false,
+  shouldStop: false,
+  progress: '',
+  percent: 0,
+  stats: null,
+
+  startRefresh: () => set({ isRefreshing: true, shouldStop: false, progress: '', percent: 0 }),
+  setProgress: (progress, percent) => set({ progress, percent }),
+  finishRefresh: (stats) => set({ isRefreshing: false, shouldStop: false, progress: '', percent: 0, stats }),
+  requestStop: () => set({ shouldStop: true, progress: 'Stopping…' }),
+  reset: () => set({ isRefreshing: false, shouldStop: false, progress: '', percent: 0 }),
+}));

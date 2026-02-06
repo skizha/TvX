@@ -15,7 +15,7 @@ type SortOption = 'name' | 'year' | 'rating';
 
 export function SeriesPage() {
   const { categories, currentServer } = useAppStore();
-  const { groupVisibility, getCachedCategories, getCachedContent, getAllCachedContent, setCachedCategories, setCachedContent, favorites, customGroups } = useSettingsStore();
+  const { groupVisibility, getCachedCategories, getCachedContent, getAllCachedContent, setCachedCategories, setCachedContent, clearCacheForType, favorites, customGroups } = useSettingsStore();
   const { loading: loadingCategories, loadCategories } = useLoadCategories();
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name');
@@ -23,6 +23,7 @@ export function SeriesPage() {
   const [series, setSeries] = useState<Series[]>([]);
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const serverId = currentServer?.id || '';
   const serverVisibilityRaw = groupVisibility[serverId] || {};
@@ -202,6 +203,28 @@ export function SeriesPage() {
     return [...customGroupCategories, ...apiCategories];
   }, [categories.series, serverVisibilityRaw, serverGroups]);
 
+  // Refresh handler: clears cache and re-fetches from server
+  const handleRefresh = useCallback(async () => {
+    if (!serverId || isRefreshing) return;
+    setIsRefreshing(true);
+    setSelectedCategoryId(null);
+    setSeries([]);
+    clearCacheForType(serverId, 'series');
+    useAppStore.getState().setCategories('series', []);
+    useAppStore.getState().setSeries([]);
+    setLoadingProgress('Refreshing Series categories…');
+    try {
+      await loadCategories('series');
+      const cats = useAppStore.getState().categories.series;
+      if (cats.length > 0) {
+        setCachedCategories(serverId, 'series', cats);
+      }
+    } finally {
+      setLoadingProgress('');
+      setIsRefreshing(false);
+    }
+  }, [serverId, isRefreshing, clearCacheForType, loadCategories, setCachedCategories]);
+
   const loading = loadingContent || loadingCategories || loadingProgress !== '';
 
   // Show category selection view
@@ -210,8 +233,25 @@ export function SeriesPage() {
       <div className="p-6">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Series</h1>
-          <p className="text-gray-400">Select a category to browse TV shows</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-white">Series</h1>
+            <button
+              onClick={handleRefresh}
+              disabled={loading || isRefreshing}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              title="Refresh from server"
+            >
+              <svg className={`w-4 h-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <p className="text-gray-400">
+            {!loading && visibleCategories.length > 0
+              ? `${visibleCategories.length} categories`
+              : 'Select a category to browse TV shows'}
+          </p>
         </div>
 
         {/* Loading */}

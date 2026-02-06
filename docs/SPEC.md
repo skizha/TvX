@@ -74,6 +74,8 @@ Returns server info, user status, and allowed output formats.
 - Grid or list view of categories
 - Breadcrumb navigation for nested folders
 - Item count per category
+- **Category count** in page header (e.g., "128 categories")
+- **Per-tab refresh button** — Inline refresh button next to each page title (Live TV, Movies, Series) that clears the cache for that content type and re-fetches categories from the server; if inside a category, navigates back to the category list first
 
 ##### Group Visibility Controls
 - **Hide All Button** - Collapse/hide all items within a category/group
@@ -124,6 +126,13 @@ Returns server info, user status, and allowed output formats.
 - **Clipboard Section**
   - Toggle: "Show confirmation when URL copied"
   - URL format preference (with/without credentials visible)
+- **Data & Cache Section**
+  - **Refresh from server** - Full refresh that clears local cache and re-fetches all categories and content from the Xtream server
+    - Progress bar with per-category status (e.g., "Live TV (5/128)…")
+    - Runs in the background — survives navigation to other tabs; progress is visible when returning to Settings
+    - **Stop button** — Gracefully cancels an in-progress refresh, keeping whatever was cached so far
+    - **Visible only toggle** — Option to only refresh content for visible (non-hidden) groups, skipping hidden categories
+  - **Cache statistics** — Shows total cached items per type (channels, movies, series) with category counts and last-refreshed timestamp
 
 ---
 
@@ -221,7 +230,9 @@ Returns server info, user status, and allowed output formats.
 
 ### Caching
 - Category lists (refresh on demand)
-- Content metadata (TTL: 24 hours)
+- Content metadata (refresh on demand via per-tab or full refresh)
+- Per-type cache clearing (`clearCacheForType`) — clears only categories and content for one type, leaving other types untouched
+- Full cache refresh from Settings — clears all types, re-fetches categories and all content per category, caches results with item counts
 - Thumbnails (disk cache)
 
 ---
