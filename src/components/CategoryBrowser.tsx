@@ -14,7 +14,9 @@ export function CategoryBrowser({ type, onCategorySelect, selectedCategoryId }: 
   const { preferences, groupVisibility, setGroupVisibility, setAllGroupsVisibility } = useSettingsStore();
 
   const serverId = currentServer?.id || '';
-  const serverVisibility = groupVisibility[serverId] || {};
+  const serverVisibilityRaw = groupVisibility[serverId] || {};
+  const isCategoryExpanded = (categoryId: number) =>
+    serverVisibilityRaw[`${type}_${categoryId}`] !== false;
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -25,30 +27,26 @@ export function CategoryBrowser({ type, onCategorySelect, selectedCategoryId }: 
   }, [categories, searchQuery]);
 
   const toggleCategory = (categoryId: number) => {
-    const isCurrentlyVisible = serverVisibility[categoryId] !== false;
+    const isCurrentlyVisible = isCategoryExpanded(categoryId);
 
     if (preferences.showOneGroupAtATime && !isCurrentlyVisible) {
       // Collapse all others, expand this one
       const allIds = categories.map((c) => c.id);
-      setAllGroupsVisibility(serverId, false, allIds);
-      setGroupVisibility(serverId, categoryId, true);
+      setAllGroupsVisibility(serverId, type, false, allIds);
+      setGroupVisibility(serverId, type, categoryId, true);
     } else {
-      setGroupVisibility(serverId, categoryId, !isCurrentlyVisible);
+      setGroupVisibility(serverId, type, categoryId, !isCurrentlyVisible);
     }
   };
 
   const handleHideAll = () => {
     const allIds = categories.map((c) => c.id);
-    setAllGroupsVisibility(serverId, false, allIds);
+    setAllGroupsVisibility(serverId, type, false, allIds);
   };
 
   const handleShowAll = () => {
     const allIds = categories.map((c) => c.id);
-    setAllGroupsVisibility(serverId, true, allIds);
-  };
-
-  const isCategoryExpanded = (categoryId: number) => {
-    return serverVisibility[categoryId] !== false;
+    setAllGroupsVisibility(serverId, type, true, allIds);
   };
 
   return (

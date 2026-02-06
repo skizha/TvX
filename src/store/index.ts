@@ -11,6 +11,7 @@ import type {
   GroupVisibility,
   WatchHistoryEntry,
   AuthResponse,
+  CustomGroup,
 } from '../types';
 
 // App State Store
@@ -150,6 +151,9 @@ interface SettingsState {
   // Watch history per server
   watchHistory: Record<string, WatchHistoryEntry[]>;
 
+  // Custom groups per server
+  customGroups: Record<string, CustomGroup[]>;
+
   // Content cache per server
   contentCache: Record<string, ContentCache>;
 
@@ -158,18 +162,25 @@ interface SettingsState {
   updateServer: (server: ServerConnection) => void;
   removeServer: (id: string) => void;
   setPreferences: (prefs: Partial<UserPreferences>) => void;
-  setGroupVisibility: (serverId: string, categoryId: number, visible: boolean) => void;
-  setAllGroupsVisibility: (serverId: string, visible: boolean, categoryIds: number[]) => void;
+  setGroupVisibility: (serverId: string, type: ContentType, categoryId: string | number, visible: boolean) => void;
+  setAllGroupsVisibility: (serverId: string, type: ContentType, visible: boolean, categoryIds: (string | number)[]) => void;
   addFavorite: (serverId: string, type: ContentType, id: number) => void;
   removeFavorite: (serverId: string, type: ContentType, id: number) => void;
   addToWatchHistory: (serverId: string, entry: WatchHistoryEntry) => void;
   clearWatchHistory: (serverId: string) => void;
+
+  // Custom group actions
+  createCustomGroup: (serverId: string, group: Omit<CustomGroup, 'id' | 'createdAt'>) => string;
+  deleteCustomGroup: (serverId: string, groupId: string) => void;
+  addContentToGroup: (serverId: string, groupId: string, contentId: number) => void;
+  removeContentFromGroup: (serverId: string, groupId: string, contentId: number) => void;
 
   // Cache actions
   setCachedCategories: (serverId: string, type: ContentType, categories: Category[]) => void;
   setCachedContent: (serverId: string, type: ContentType, categoryId: number, content: Channel[] | Movie[] | Series[]) => void;
   getCachedCategories: (serverId: string, type: ContentType) => Category[] | null;
   getCachedContent: (serverId: string, type: ContentType, categoryId: number) => Channel[] | Movie[] | Series[] | null;
+  getAllCachedContent: (serverId: string, type: ContentType) => Channel[] | Movie[] | Series[] | null;
   clearCache: (serverId: string) => void;
 }
 
@@ -195,6 +206,7 @@ export const useSettingsStore = create<SettingsState>()(
       groupVisibility: {},
       favorites: {},
       watchHistory: {},
+      customGroups: {},
       contentCache: {},
 
       addServer: (server) =>
@@ -215,27 +227,31 @@ export const useSettingsStore = create<SettingsState>()(
           preferences: { ...state.preferences, ...prefs },
         })),
 
-      setGroupVisibility: (serverId, categoryId, visible) =>
-        set((state) => ({
-          groupVisibility: {
-            ...state.groupVisibility,
-            [serverId]: {
-              ...state.groupVisibility[serverId],
-              [categoryId]: visible,
-            },
-          },
-        })),
-
-      setAllGroupsVisibility: (serverId, visible, categoryIds) =>
+      setGroupVisibility: (serverId, type, categoryId, visible) =>
         set((state) => {
-          const newVisibility: GroupVisibility = {};
+          const key = `${type}_${String(categoryId)}`;
+          return {
+            groupVisibility: {
+              ...state.groupVisibility,
+              [serverId]: {
+                ...state.groupVisibility[serverId],
+                [key]: visible,
+              },
+            },
+          };
+        }),
+
+      setAllGroupsVisibility: (serverId, type, visible, categoryIds) =>
+        set((state) => {
+          const prev = state.groupVisibility[serverId] || {};
+          const updates: GroupVisibility = {};
           categoryIds.forEach((id) => {
-            newVisibility[id] = visible;
+            updates[`${type}_${String(id)}`] = visible;
           });
           return {
             groupVisibility: {
               ...state.groupVisibility,
-              [serverId]: newVisibility,
+              [serverId]: { ...prev, ...updates },
             },
           };
         }),
@@ -295,6 +311,63 @@ export const useSettingsStore = create<SettingsState>()(
           },
         })),
 
+      // Custom group actions
+      createCustomGroup: (serverId, groupData) => {
+        const id = crypto.randomUUID();
+        const newGroup: CustomGroup = {
+          ...groupData,
+          id,
+          createdAt: Date.now(),
+        };
+        set((state) => ({
+          customGroups: {
+            ...state.customGroups,
+            [serverId]: [...(state.customGroups[serverId] || []), newGroup],
+          },
+        }));
+        return id;
+      },
+
+      deleteCustomGroup: (serverId, groupId) =>
+        set((state) => ({
+          customGroups: {
+            ...state.customGroups,
+            [serverId]: (state.customGroups[serverId] || []).filter((g) => g.id !== groupId),
+          },
+        })),
+
+      addContentToGroup: (serverId, groupId, contentId) =>
+        set((state) => {
+          const id = Number(contentId);
+          const groups = state.customGroups[serverId] || [];
+          return {
+            customGroups: {
+              ...state.customGroups,
+              [serverId]: groups.map((g) =>
+                g.id === groupId && !g.contentIds.some((cid) => Number(cid) === id)
+                  ? { ...g, contentIds: [...g.contentIds, id] }
+                  : g
+              ),
+            },
+          };
+        }),
+
+      removeContentFromGroup: (serverId, groupId, contentId) =>
+        set((state) => {
+          const id = Number(contentId);
+          const groups = state.customGroups[serverId] || [];
+          return {
+            customGroups: {
+              ...state.customGroups,
+              [serverId]: groups.map((g) =>
+                g.id === groupId
+                  ? { ...g, contentIds: g.contentIds.filter((cid) => Number(cid) !== id) }
+                  : g
+              ),
+            },
+          };
+        }),
+
       // Cache actions
       setCachedCategories: (serverId, type, categories) =>
         set((state) => {
@@ -349,6 +422,23 @@ export const useSettingsStore = create<SettingsState>()(
         }
 
         return content;
+      },
+
+      getAllCachedContent: (serverId, type) => {
+        const cache = get().contentCache[serverId];
+        if (!cache) return null;
+        const contentKey = type === 'live' ? 'channels' : type === 'movie' ? 'movies' : 'series';
+        const byCategory = cache[contentKey];
+        const all = (Object.values(byCategory) as (Channel[] | Movie[] | Series[])[]).flat();
+        if (all.length === 0) return null;
+        // Dedupe by id (same item can be in multiple category caches in theory)
+        const seen = new Set<number>();
+        const deduped = all.filter((item) => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        return deduped as Channel[] | Movie[] | Series[];
       },
 
       clearCache: (serverId) =>
