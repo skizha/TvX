@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tvx_temp",
+  "productName": "tvx",
   "version": "0.1.0",
-  "identifier": "com.sanje.tvx_temp",
+  "identifier": "com.sanje.tvx-temp",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "tvx_temp",
+        "title": "tvx",
         "width": 800,
         "height": 600
       }

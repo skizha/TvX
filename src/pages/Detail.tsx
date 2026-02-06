@@ -127,6 +127,7 @@ export function DetailPage() {
     } else {
       addFavorite(serverId, contentType, itemId);
     }
+    useAppStore.getState().toggleFavorite(contentType, itemId);
   };
 
   if (!item) {

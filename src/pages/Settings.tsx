@@ -1,57 +1,32 @@
-import { useSettingsStore, useAppStore } from '../store';
+import { useState } from 'react';
+import { useSettingsStore } from '../store';
+import { GroupManager } from '../components/GroupManager';
 
 export function SettingsPage() {
-  const { preferences, setPreferences, servers, removeServer, setAllGroupsVisibility } = useSettingsStore();
-  const { categories, currentServer } = useAppStore();
-
-  const serverId = currentServer?.id || '';
-  const allCategoryIds = [
-    ...categories.live.map((c) => c.id),
-    ...categories.movie.map((c) => c.id),
-    ...categories.series.map((c) => c.id),
-  ];
-
-  const handleExpandAll = () => {
-    setAllGroupsVisibility(serverId, true, allCategoryIds);
-  };
-
-  const handleCollapseAll = () => {
-    setAllGroupsVisibility(serverId, false, allCategoryIds);
-  };
+  const [showGroupManager, setShowGroupManager] = useState(false);
+  const { preferences, setPreferences, servers, removeServer } = useSettingsStore();
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-white mb-8">Settings</h1>
 
-      {/* Group Behavior */}
+      {/* Group Management */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-white mb-4">Group Behavior</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Group Management</h2>
         <div className="bg-gray-800 rounded-lg p-4 space-y-4">
-          <label className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-white">Show one group at a time</p>
-              <p className="text-sm text-gray-400">Expanding one group will collapse others (accordion mode)</p>
+              <p className="text-white">Manage Groups</p>
+              <p className="text-sm text-gray-400">Show/hide categories and create custom groups</p>
             </div>
-            <input
-              type="checkbox"
-              checked={preferences.showOneGroupAtATime}
-              onChange={(e) => setPreferences({ showOneGroupAtATime: e.target.checked })}
-              className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500"
-            />
-          </label>
-
-          <div className="flex gap-3 pt-2">
             <button
-              onClick={handleExpandAll}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              onClick={() => setShowGroupManager(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
             >
-              Expand All Groups
-            </button>
-            <button
-              onClick={handleCollapseAll}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Collapse All Groups
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+              Manage
             </button>
           </div>
         </div>
@@ -180,6 +155,9 @@ export function SettingsPage() {
           <p className="text-gray-500 text-sm mt-2">Version 0.1.0</p>
         </div>
       </section>
+
+      {/* Group Manager Modal */}
+      {showGroupManager && <GroupManager onClose={() => setShowGroupManager(false)} />}
     </div>
   );
 }

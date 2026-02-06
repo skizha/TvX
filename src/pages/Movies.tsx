@@ -5,13 +5,19 @@ import { ContentGrid } from '../components/ContentGrid';
 import { getApi } from '../api';
 import type { Movie, Category } from '../types';
 
+// Extended category type to include custom groups
+interface ExtendedCategory extends Category {
+  isCustomGroup?: boolean;
+  customGroupId?: string;
+}
+
 type SortOption = 'name' | 'year' | 'rating';
 
 export function MoviesPage() {
   const { categories, currentServer } = useAppStore();
-  const { groupVisibility, getCachedCategories, getCachedContent, setCachedCategories, setCachedContent, favorites } = useSettingsStore();
+  const { groupVisibility, getCachedCategories, getCachedContent, getAllCachedContent, setCachedCategories, setCachedContent, favorites, customGroups } = useSettingsStore();
   const { loading: loadingCategories, loadCategories } = useLoadCategories();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [searchQuery, setSearchQuery] = useState('');
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -19,7 +25,9 @@ export function MoviesPage() {
   const [loadingProgress, setLoadingProgress] = useState('');
 
   const serverId = currentServer?.id || '';
-  const serverVisibility = groupVisibility[serverId] || {};
+  const serverVisibilityRaw = groupVisibility[serverId] || {};
+  const isVisible = (id: number | string) => serverVisibilityRaw[`movie_${String(id)}`] !== false;
+  const serverGroups = customGroups[serverId] || [];
 
   // Load categories (with cache)
   useEffect(() => {
@@ -46,12 +54,52 @@ export function MoviesPage() {
     }
   }, [serverId, categories.movie.length, loadCategories, getCachedCategories, setCachedCategories]);
 
-  // Load content for selected category (with cache)
-  const loadCategoryContent = useCallback(async (categoryId: number) => {
+  // Load content for selected category (with cache) or custom group
+  const loadCategoryContent = useCallback(async (categoryId: number | string) => {
     if (!serverId) return;
 
-    // Check cache first
-    const cached = getCachedContent(serverId, 'movie', categoryId);
+    // Check if this is a custom group – load from cache first, then filter by group IDs; API only if no cache
+    if (typeof categoryId === 'string') {
+      const customGroup = serverGroups.find((g) => g.id === categoryId);
+      if (customGroup) {
+        const allCached = getAllCachedContent(serverId, 'movie');
+        if (allCached && allCached.length > 0) {
+          const customMovies = allCached.filter((m) =>
+            customGroup.contentIds.some((id) => Number(id) === m.id)
+          ) as Movie[];
+          setMovies(customMovies);
+          setLoadingContent(false);
+          return;
+        }
+        setLoadingContent(true);
+        setLoadingProgress('Loading group...');
+        const api = getApi();
+        if (!api) {
+          setLoadingContent(false);
+          return;
+        }
+        try {
+          const serverFavorites = favorites[serverId] || { live: [], movie: [], series: [] };
+          const vods = await api.getVodStreams();
+          const allMoviesFromApi = api.transformMovies(vods, serverFavorites.movie);
+          const customMovies = allMoviesFromApi.filter((m) =>
+            customGroup.contentIds.some((id) => Number(id) === m.id)
+          );
+          setMovies(customMovies);
+          useAppStore.getState().setMovies(allMoviesFromApi);
+        } catch (err) {
+          console.error('Failed to load custom group movies:', err);
+          setMovies([]);
+        } finally {
+          setLoadingContent(false);
+          setLoadingProgress('');
+        }
+        return;
+      }
+    }
+
+    // Check cache first for API categories
+    const cached = getCachedContent(serverId, 'movie', categoryId as number);
     if (cached && cached.length > 0) {
       const cachedMovies = cached as Movie[];
       setMovies(cachedMovies);
@@ -77,7 +125,7 @@ export function MoviesPage() {
 
     try {
       const serverFavorites = favorites[serverId] || { live: [], movie: [], series: [] };
-      const vods = await api.getVodStreams(categoryId);
+      const vods = await api.getVodStreams(categoryId as number);
       const transformedMovies = api.transformMovies(vods, serverFavorites.movie);
       setMovies(transformedMovies);
 
@@ -92,14 +140,14 @@ export function MoviesPage() {
       useAppStore.getState().setMovies(newMovies);
 
       // Cache the content
-      setCachedContent(serverId, 'movie', categoryId, transformedMovies);
+      setCachedContent(serverId, 'movie', categoryId as number, transformedMovies);
     } catch (err) {
       console.error('Failed to load movies:', err);
     } finally {
       setLoadingContent(false);
       setLoadingProgress('');
     }
-  }, [serverId, getCachedContent, setCachedContent, favorites]);
+  }, [serverId, getCachedContent, getAllCachedContent, setCachedContent, favorites, serverGroups]);
 
   // Load content when category is selected
   useEffect(() => {
@@ -131,10 +179,27 @@ export function MoviesPage() {
     return filtered;
   }, [movies, sortBy, searchQuery]);
 
-  // Filter visible categories
+  // Combine API categories with custom groups and filter by visibility
   const visibleCategories = useMemo(() => {
-    return categories.movie.filter((cat) => serverVisibility[cat.id] !== false);
-  }, [categories.movie, serverVisibility]);
+    // API categories
+    const apiCategories: ExtendedCategory[] = categories.movie
+      .filter((cat) => isVisible(cat.id))
+      .map((cat) => ({ ...cat, isCustomGroup: false }));
+
+    // Custom groups for this content type
+    const customGroupCategories: ExtendedCategory[] = serverGroups
+      .filter((g) => g.type === 'movie' && isVisible(g.id))
+      .map((g) => ({
+        id: -1, // Placeholder, we use customGroupId instead
+        name: g.name,
+        parentId: null,
+        type: 'movie' as const,
+        isCustomGroup: true,
+        customGroupId: g.id,
+      }));
+
+    return [...customGroupCategories, ...apiCategories];
+  }, [categories.movie, serverVisibilityRaw, serverGroups]);
 
   const loading = loadingContent || loadingCategories;
 
@@ -163,9 +228,10 @@ export function MoviesPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {visibleCategories.map((category) => (
               <CategoryCard
-                key={category.id}
+                key={category.isCustomGroup ? category.customGroupId : category.id}
                 category={category}
-                onClick={() => setSelectedCategoryId(category.id)}
+                onClick={() => setSelectedCategoryId(category.isCustomGroup ? category.customGroupId! : category.id)}
+                isCustomGroup={category.isCustomGroup}
               />
             ))}
           </div>
@@ -180,8 +246,11 @@ export function MoviesPage() {
     );
   }
 
-  // Show content view
-  const selectedCategory = categories.movie.find((c) => c.id === selectedCategoryId);
+  // Show content view - find selected category (either API or custom)
+  const selectedCategory = typeof selectedCategoryId === 'string'
+    ? serverGroups.find((g) => g.id === selectedCategoryId)
+    : categories.movie.find((c) => c.id === selectedCategoryId);
+  const selectedCategoryName = selectedCategory?.name || 'Movies';
 
   return (
     <div className="p-6">
@@ -196,7 +265,7 @@ export function MoviesPage() {
           </svg>
           <span>Back to Categories</span>
         </button>
-        <h1 className="text-3xl font-bold text-white mb-2">{selectedCategory?.name || 'Movies'}</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">{selectedCategoryName}</h1>
         <p className="text-gray-400">{visibleMovies.length} movies</p>
       </div>
 
@@ -245,16 +314,22 @@ export function MoviesPage() {
 }
 
 // Category Card Component
-function CategoryCard({ category, onClick }: { category: Category; onClick: () => void }) {
+function CategoryCard({ category, onClick, isCustomGroup }: { category: ExtendedCategory; onClick: () => void; isCustomGroup?: boolean }) {
   return (
     <button
       onClick={onClick}
       className="group relative bg-gradient-to-br from-[#1a1a2e] to-[#16161f] rounded-xl p-4 text-left hover:from-blue-900/30 hover:to-purple-900/30 transition-all duration-300 border border-gray-800/50 hover:border-blue-500/50 flex items-center gap-3"
     >
-      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0 group-hover:from-blue-500/30 group-hover:to-purple-500/30 transition-colors">
-        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-        </svg>
+      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${isCustomGroup ? 'from-purple-500/20 to-pink-500/20 group-hover:from-purple-500/30 group-hover:to-pink-500/30' : 'from-blue-500/20 to-purple-500/20 group-hover:from-blue-500/30 group-hover:to-purple-500/30'} flex items-center justify-center flex-shrink-0 transition-colors`}>
+        {isCustomGroup ? (
+          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        ) : (
+          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+          </svg>
+        )}
       </div>
       <h3 className="font-semibold text-white truncate">{category.name}</h3>
     </button>

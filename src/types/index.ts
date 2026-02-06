@@ -90,9 +90,18 @@ export interface UserPreferences {
   hideCredentialsInUrl: boolean;
 }
 
-// Group visibility state
+// Group visibility state (supports both numeric category IDs and string custom group IDs)
 export interface GroupVisibility {
-  [categoryId: number]: boolean;
+  [categoryId: string]: boolean;
+}
+
+// Custom group (user-created)
+export interface CustomGroup {
+  id: string;           // UUID
+  name: string;         // User-defined name
+  type: ContentType;    // 'live' | 'movie' | 'series'
+  contentIds: number[]; // IDs of channels/movies/series
+  createdAt: number;    // Timestamp
 }
 
 // Watch history entry

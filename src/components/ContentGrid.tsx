@@ -4,6 +4,7 @@ import { useAppStore, useSettingsStore } from '../store';
 import { getApi } from '../api';
 import { copyToClipboard } from '../utils';
 import { invoke } from '@tauri-apps/api/core';
+import { AddToGroupMenu } from './AddToGroupMenu';
 import type { Channel, Movie, Series, ContentType } from '../types';
 
 interface ContentGridProps {
@@ -19,6 +20,7 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
   const { preferences, addFavorite, removeFavorite, favorites } = useSettingsStore();
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: Channel | Movie | Series } | null>(null);
+  const [showAddToGroupMenu, setShowAddToGroupMenu] = useState(false);
 
   const serverId = currentServer?.id || '';
   const serverFavorites = favorites[serverId]?.[type] || [];
@@ -85,6 +87,7 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
     } else {
       addFavorite(serverId, type, item.id);
     }
+    useAppStore.getState().toggleFavorite(type, item.id);
     setContextMenu(null);
   };
 
@@ -93,7 +96,10 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
     setContextMenu({ x: e.clientX, y: e.clientY, item });
   };
 
-  const closeContextMenu = () => setContextMenu(null);
+  const closeContextMenu = () => {
+    setContextMenu(null);
+    setShowAddToGroupMenu(false);
+  };
 
   if (loading) {
     return (
@@ -147,6 +153,7 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
             <div
               className="fixed bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 z-50 min-w-[200px] backdrop-blur-xl"
               style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => {
@@ -178,6 +185,30 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
                 </svg>
                 {serverFavorites.includes(contextMenu.item.id) ? 'Remove from Favorites' : 'Add to Favorites'}
               </button>
+              <div className="h-px bg-gray-700/50 my-1" />
+              <div className="relative">
+                <button
+                  onClick={() => setShowAddToGroupMenu(!showAddToGroupMenu)}
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
+                  </svg>
+                  Add to Group
+                  <svg className="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {showAddToGroupMenu && (
+                  <div className="absolute left-full top-0 ml-1 bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 min-w-[180px] backdrop-blur-xl">
+                    <AddToGroupMenu
+                      contentId={contextMenu.item.id}
+                      contentType={type}
+                      onClose={closeContextMenu}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -211,8 +242,9 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
           <div
             className="fixed bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 z-50 min-w-[200px] backdrop-blur-xl"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {(type === 'live' || type === 'movie') && (
+            {type === 'movie' && (
               <button
                 onClick={() => {
                   navigate(`/player/${type}/${contextMenu!.item.id}`);
@@ -244,6 +276,30 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
               </svg>
               {serverFavorites.includes(contextMenu.item.id) ? 'Remove from Favorites' : 'Add to Favorites'}
             </button>
+            <div className="h-px bg-gray-700/50 my-1" />
+            <div className="relative">
+              <button
+                onClick={() => setShowAddToGroupMenu(!showAddToGroupMenu)}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+              >
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
+                </svg>
+                Add to Group
+                <svg className="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              {showAddToGroupMenu && (
+                <div className="absolute left-full top-0 ml-1 bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 min-w-[180px] backdrop-blur-xl">
+                  <AddToGroupMenu
+                    contentId={contextMenu.item.id}
+                    contentType={type}
+                    onClose={closeContextMenu}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

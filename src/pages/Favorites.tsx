@@ -1,22 +1,51 @@
 import { useState, useMemo } from 'react';
 import { useAppStore, useSettingsStore } from '../store';
 import { ContentGrid } from '../components/ContentGrid';
-import type { ContentType } from '../types';
+import type { Channel, Movie, Series, ContentType } from '../types';
 
 type TabType = 'all' | ContentType;
 
 export function FavoritesPage() {
-  const { channels, movies, series, currentServer } = useAppStore();
-  const { favorites } = useSettingsStore();
+  const { channels, movies, series, categories, currentServer } = useAppStore();
+  const { favorites, groupVisibility, customGroups } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<TabType>('all');
 
   const serverId = currentServer?.id || '';
   const serverFavorites = favorites[serverId] || { live: [], movie: [], series: [] };
+  const serverVisibilityRaw = groupVisibility[serverId] || {};
+  const serverGroups = customGroups[serverId] || [];
+
+  const isGroupVisible = (type: ContentType, id: number | string) =>
+    serverVisibilityRaw[`${type}_${String(id)}`] !== false;
+
+  const visibleCategoryIds = useMemo(() => ({
+    live: (categories.live || []).filter((c) => isGroupVisible('live', c.id)).map((c) => c.id),
+    movie: (categories.movie || []).filter((c) => isGroupVisible('movie', c.id)).map((c) => c.id),
+    series: (categories.series || []).filter((c) => isGroupVisible('series', c.id)).map((c) => c.id),
+  }), [categories.live, categories.movie, categories.series, serverVisibilityRaw]);
+
+  const visibleCustomGroupIds = useMemo(() => ({
+    live: serverGroups.filter((g) => g.type === 'live' && isGroupVisible('live', g.id)).map((g) => g.id),
+    movie: serverGroups.filter((g) => g.type === 'movie' && isGroupVisible('movie', g.id)).map((g) => g.id),
+    series: serverGroups.filter((g) => g.type === 'series' && isGroupVisible('series', g.id)).map((g) => g.id),
+  }), [serverGroups, serverVisibilityRaw]);
+
+  const isInVisibleGroup = (type: ContentType, item: Channel | Movie | Series) => {
+    const inVisibleCategory = visibleCategoryIds[type].includes(item.categoryId);
+    const inVisibleCustomGroup = visibleCustomGroupIds[type].some((gid) => {
+      const group = serverGroups.find((g) => g.id === gid);
+      return group?.contentIds.some((id) => Number(id) === item.id) ?? false;
+    });
+    return inVisibleCategory || inVisibleCustomGroup;
+  };
 
   const favoriteItems = useMemo(() => {
-    const liveItems = channels.filter((c) => serverFavorites.live.includes(c.id));
-    const movieItems = movies.filter((m) => serverFavorites.movie.includes(m.id));
-    const seriesItems = series.filter((s) => serverFavorites.series.includes(s.id));
+    const liveItems = channels
+      .filter((c) => serverFavorites.live.includes(c.id) && isInVisibleGroup('live', c));
+    const movieItems = movies
+      .filter((m) => serverFavorites.movie.includes(m.id) && isInVisibleGroup('movie', m));
+    const seriesItems = series
+      .filter((s) => serverFavorites.series.includes(s.id) && isInVisibleGroup('series', s));
 
     return {
       live: liveItems,
@@ -24,7 +53,7 @@ export function FavoritesPage() {
       series: seriesItems,
       all: [...liveItems, ...movieItems, ...seriesItems],
     };
-  }, [channels, movies, series, serverFavorites]);
+  }, [channels, movies, series, serverFavorites, visibleCategoryIds, visibleCustomGroupIds, serverGroups]);
 
   const tabs: { key: TabType; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: favoriteItems.all.length },

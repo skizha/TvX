@@ -55,7 +55,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-gray-100 flex">
       {/* Sidebar */}
-      <aside className="w-20 lg:w-64 bg-[#12121a] border-r border-gray-800/50 flex flex-col">
+      <aside className="w-20 lg:w-64 h-screen bg-[#12121a] border-r border-gray-800/50 flex flex-col sticky top-0">
         {/* Logo */}
         <div className="p-4 lg:p-6 border-b border-gray-800/50">
           <div className="flex items-center gap-3">
@@ -71,7 +71,7 @@ export function Layout() {
         </div>
 
         {/* Main Tabs */}
-        <nav className="flex-1 p-3 lg:p-4 space-y-2">
+        <nav className="flex-1 p-3 lg:p-4 space-y-2 overflow-y-auto">
           {tabs.map((tab) => (
             <button
               key={tab.key}

@@ -16,7 +16,10 @@
       "Bash(npx tailwindcss init -p)",
       "Bash(npx tsc:*)",
       "Bash(npm run tauri:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
