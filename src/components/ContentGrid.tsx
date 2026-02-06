@@ -120,6 +120,71 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
     );
   }
 
+  // Use compact layout for live channels, card layout for movies/series
+  if (type === 'live') {
+    return (
+      <div onClick={closeContextMenu}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {items.map((item) => (
+            <ChannelCard
+              key={item.id}
+              channel={item as Channel}
+              isFavorite={serverFavorites.includes(item.id)}
+              isCopied={copiedId === item.id}
+              showCopyConfirmation={preferences.showCopyConfirmation}
+              onClick={() => handleItemClick(item)}
+              onCopyUrl={(e) => handleCopyUrl(item, e)}
+              onToggleFavorite={(e) => handleToggleFavorite(item, e)}
+              onContextMenu={(e) => handleContextMenu(e, item)}
+            />
+          ))}
+        </div>
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={closeContextMenu} />
+            <div
+              className="fixed bg-[#1a1a24] border border-gray-700/50 rounded-xl shadow-2xl py-2 z-50 min-w-[200px] backdrop-blur-xl"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+            >
+              <button
+                onClick={() => {
+                  navigate(`/player/${type}/${contextMenu!.item.id}`);
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+              >
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Additional Players
+              </button>
+              <button
+                onClick={() => handleCopyUrl(contextMenu.item)}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+              >
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                Copy Stream URL
+              </button>
+              <button
+                onClick={() => handleToggleFavorite(contextMenu.item)}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-3 transition-colors"
+              >
+                <svg className={`w-4 h-4 ${serverFavorites.includes(contextMenu.item.id) ? 'text-red-400' : 'text-gray-400'}`} fill={serverFavorites.includes(contextMenu.item.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {serverFavorites.includes(contextMenu.item.id) ? 'Remove from Favorites' : 'Add to Favorites'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div onClick={closeContextMenu}>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
@@ -309,6 +374,91 @@ function ContentCard({ item, type, isFavorite, isCopied, showCopyConfirmation, o
             <span className="text-xs text-gray-400">{item.rating}</span>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Compact channel card for live TV
+interface ChannelCardProps {
+  channel: Channel;
+  isFavorite: boolean;
+  isCopied: boolean;
+  showCopyConfirmation: boolean;
+  onClick: () => void;
+  onCopyUrl: (e: React.MouseEvent) => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}
+
+function ChannelCard({ channel, isFavorite, isCopied, showCopyConfirmation, onClick, onCopyUrl, onToggleFavorite, onContextMenu }: ChannelCardProps) {
+  const [imageError, setImageError] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className="group relative bg-gradient-to-br from-[#1a1a2e] to-[#16161f] rounded-xl p-3 cursor-pointer hover:from-blue-900/30 hover:to-purple-900/30 transition-all duration-300 border border-gray-800/50 hover:border-blue-500/50 flex items-center gap-3"
+    >
+      {/* Channel Icon */}
+      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
+        {channel.icon && !imageError ? (
+          <img
+            src={channel.icon}
+            alt={channel.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        )}
+      </div>
+
+      {/* Channel Name */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white truncate">{channel.name}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+          <span className="text-[10px] text-red-400 font-medium">LIVE</span>
+        </div>
+      </div>
+
+      {/* Favorite indicator */}
+      {isFavorite && (
+        <svg className="w-4 h-4 text-red-500 fill-current flex-shrink-0" viewBox="0 0 24 24">
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
+      )}
+
+      {/* Hover actions */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={onCopyUrl}
+          className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/80 transition-colors"
+          title="Copy URL"
+        >
+          {isCopied && showCopyConfirmation ? (
+            <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          )}
+        </button>
+        <button
+          onClick={onToggleFavorite}
+          className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-black/80 transition-colors"
+          title="Toggle Favorite"
+        >
+          <svg className={`w-3.5 h-3.5 ${isFavorite ? 'text-red-500 fill-current' : 'text-white'}`} fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
+        </button>
       </div>
     </div>
   );
