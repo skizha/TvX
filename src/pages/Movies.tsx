@@ -15,7 +15,7 @@ type SortOption = 'name' | 'year' | 'rating';
 
 export function MoviesPage() {
   const { categories, currentServer } = useAppStore();
-  const { groupVisibility, getCachedCategories, getCachedContent, getAllCachedContent, setCachedCategories, setCachedContent, favorites, customGroups } = useSettingsStore();
+  const { groupVisibility, getCachedCategories, getCachedContent, getAllCachedContent, setCachedCategories, setCachedContent, clearCacheForType, favorites, customGroups } = useSettingsStore();
   const { loading: loadingCategories, loadCategories } = useLoadCategories();
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name');
@@ -23,6 +23,7 @@ export function MoviesPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loadingContent, setLoadingContent] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const serverId = currentServer?.id || '';
   const serverVisibilityRaw = groupVisibility[serverId] || {};
@@ -37,12 +38,13 @@ export function MoviesPage() {
     const cached = getCachedCategories(serverId, 'movie');
     if (cached && cached.length > 0) {
       useAppStore.getState().setCategories('movie', cached);
+      setLoadingProgress('');
       return;
     }
 
     // Load from API if not cached
     if (categories.movie.length === 0) {
-      setLoadingProgress('Loading categories...');
+      setLoadingProgress('Loading Movie categories…');
       loadCategories('movie').then(() => {
         // Cache the categories
         const cats = useAppStore.getState().categories.movie;
@@ -121,7 +123,7 @@ export function MoviesPage() {
     if (!api) return;
 
     setLoadingContent(true);
-    setLoadingProgress(`Loading movies...`);
+    setLoadingProgress('Loading movies…');
 
     try {
       const serverFavorites = favorites[serverId] || { live: [], movie: [], series: [] };
@@ -201,7 +203,29 @@ export function MoviesPage() {
     return [...customGroupCategories, ...apiCategories];
   }, [categories.movie, serverVisibilityRaw, serverGroups]);
 
-  const loading = loadingContent || loadingCategories;
+  // Refresh handler: clears cache and re-fetches from server
+  const handleRefresh = useCallback(async () => {
+    if (!serverId || isRefreshing) return;
+    setIsRefreshing(true);
+    setSelectedCategoryId(null);
+    setMovies([]);
+    clearCacheForType(serverId, 'movie');
+    useAppStore.getState().setCategories('movie', []);
+    useAppStore.getState().setMovies([]);
+    setLoadingProgress('Refreshing Movie categories…');
+    try {
+      await loadCategories('movie');
+      const cats = useAppStore.getState().categories.movie;
+      if (cats.length > 0) {
+        setCachedCategories(serverId, 'movie', cats);
+      }
+    } finally {
+      setLoadingProgress('');
+      setIsRefreshing(false);
+    }
+  }, [serverId, isRefreshing, clearCacheForType, loadCategories, setCachedCategories]);
+
+  const loading = loadingContent || loadingCategories || loadingProgress !== '';
 
   // Show category selection view
   if (selectedCategoryId === null) {
@@ -209,22 +233,38 @@ export function MoviesPage() {
       <div className="p-6">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Movies</h1>
-          <p className="text-gray-400">Select a category to browse movies</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-white">Movies</h1>
+            <button
+              onClick={handleRefresh}
+              disabled={loading || isRefreshing}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              title="Refresh from server"
+            >
+              <svg className={`w-4 h-4 ${isRefreshing || loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <p className="text-gray-400">
+            {!loading && visibleCategories.length > 0
+              ? `${visibleCategories.length} categories`
+              : 'Select a category to browse movies'}
+          </p>
         </div>
 
         {/* Loading */}
-        {loadingCategories && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-400">{loadingProgress || 'Loading...'}</p>
-            </div>
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 px-4">
+            <div className="w-14 h-14 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-5" />
+            <p className="text-white font-medium text-lg mb-1">{loadingProgress || 'Loading…'}</p>
+            <p className="text-gray-500 text-sm">This may take a moment</p>
           </div>
         )}
 
         {/* Category Grid */}
-        {!loadingCategories && (
+        {!loading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {visibleCategories.map((category) => (
               <CategoryCard
@@ -237,7 +277,7 @@ export function MoviesPage() {
           </div>
         )}
 
-        {!loadingCategories && visibleCategories.length === 0 && (
+        {!loading && visibleCategories.length === 0 && (
           <div className="text-center py-20">
             <p className="text-gray-400">No categories available</p>
           </div>
@@ -299,11 +339,10 @@ export function MoviesPage() {
 
       {/* Loading Progress */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">{loadingProgress || 'Loading...'}</p>
-          </div>
+        <div className="flex flex-col items-center justify-center py-24 px-4">
+          <div className="w-14 h-14 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-5" />
+          <p className="text-white font-medium text-lg mb-1">{loadingProgress || 'Loading…'}</p>
+          <p className="text-gray-500 text-sm">This may take a moment</p>
         </div>
       )}
 

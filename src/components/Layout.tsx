@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppStore } from '../store';
+import { useLoadInitialCategories } from '../hooks';
 import type { ContentType } from '../types';
 import type { ReactNode } from 'react';
 
@@ -7,6 +9,11 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentServer, activeTab, setActiveTab, isConnected } = useAppStore();
+  const { loading: loadingCategories, progressMessage, progressPercent, runInitialLoad } = useLoadInitialCategories();
+
+  useEffect(() => {
+    if (currentServer?.id) runInitialLoad();
+  }, [currentServer?.id, runInitialLoad]);
 
   const handleTabClick = (tab: ContentType) => {
     setActiveTab(tab);
@@ -150,6 +157,22 @@ export function Layout() {
           )}
         </div>
       </aside>
+
+      {/* Initial categories loading progress bar */}
+      {loadingCategories && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f] border-b border-gray-800/50">
+          <div className="h-1 bg-gray-800/50">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="px-4 py-2 flex items-center justify-center gap-3">
+            <div className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-gray-300">{progressMessage}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">

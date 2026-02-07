@@ -32,9 +32,10 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
         onItemClick(item);
         return;
       }
+      const api = getApi();
+      if (!api) return;
+
       if (type === 'live') {
-        const api = getApi();
-        if (!api) return;
         const streamUrl = api.buildLiveStreamUrl(item.id, 'm3u8');
         try {
           await invoke('open_video_window', {
@@ -44,6 +45,24 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
           if (serverId) {
             addToWatchHistory(serverId, {
               contentType: 'live',
+              contentId: item.id,
+              timestamp: Date.now(),
+            });
+          }
+        } catch (err) {
+          console.error('Failed to open video window:', err);
+        }
+      } else if (type === 'movie') {
+        const ext = (item as Movie).extension || 'mp4';
+        const streamUrl = api.buildVodStreamUrl(item.id, ext);
+        try {
+          await invoke('open_video_window', {
+            title: item.name,
+            streamUrl,
+          });
+          if (serverId) {
+            addToWatchHistory(serverId, {
+              contentType: 'movie',
               contentId: item.id,
               timestamp: Date.now(),
             });
