@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore, useSettingsStore } from '../store';
 import { initApi, testConnection, XtreamApiError } from '../api';
@@ -11,20 +11,49 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { setCurrentServer, setAuthInfo, setConnected, setConnecting } = useAppStore();
   const { servers, addServer, updateServer } = useSettingsStore();
+  const autoConnectAttempted = useRef(false);
 
   const [serverUrl, setServerUrl] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberCredentials, setRememberCredentials] = useState(true);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [autoConnecting, setAutoConnecting] = useState(false);
+  const [autoConnectError, setAutoConnectError] = useState('');
+
+  // Auto-login: when a saved server exists, try to connect once on mount
+  useEffect(() => {
+    if (servers.length === 0 || autoConnectAttempted.current) return;
+    autoConnectAttempted.current = true;
+    const server = [...servers].sort((a, b) => (b.lastConnected ?? 0) - (a.lastConnected ?? 0))[0];
+    setAutoConnecting(true);
+    setAutoConnectError('');
+    testConnection(server)
+      .then((authResponse) => {
+        const updated = { ...server, lastConnected: Date.now() };
+        updateServer(updated);
+        initApi(updated);
+        setCurrentServer(updated);
+        setAuthInfo(authResponse);
+        setConnected(true);
+        setAutoConnecting(false);
+        navigate('/live', { replace: true });
+      })
+      .catch(() => {
+        setAutoConnecting(false);
+        setAutoConnectError('failed');
+      });
+  }, [servers, updateServer, setCurrentServer, setAuthInfo, setConnected, navigate]);
 
   useEffect(() => {
     if (servers.length > 0) {
       const lastServer = servers[0];
       setSelectedServerId(lastServer.id);
       setServerUrl(lastServer.url);
+      setDisplayName(lastServer.name);
       setUsername(lastServer.username);
       setPassword(lastServer.password);
     }
@@ -35,6 +64,7 @@ export function LoginPage() {
     if (server) {
       setSelectedServerId(serverId);
       setServerUrl(server.url);
+      setDisplayName(server.name);
       setUsername(server.username);
       setPassword(server.password);
     }
@@ -43,8 +73,20 @@ export function LoginPage() {
   const handleNewServer = () => {
     setSelectedServerId(null);
     setServerUrl('');
+    setDisplayName('');
     setUsername('');
     setPassword('');
+  };
+
+  const handleServerUrlChange = (url: string) => {
+    setServerUrl(url);
+    try {
+      const normalized = normalizeServerUrl(url);
+      const hostname = new URL(normalized).hostname;
+      if (hostname && !displayName) setDisplayName(hostname);
+    } catch {
+      // ignore invalid URL
+    }
   };
 
   const isFormValid = serverUrl.trim() && username.trim() && password.trim();
@@ -58,9 +100,10 @@ export function LoginPage() {
     setErrorMessage('');
 
     const normalizedUrl = normalizeServerUrl(serverUrl);
+    const hostname = new URL(normalizedUrl).hostname;
     const serverConnection: ServerConnection = {
       id: selectedServerId || generateId(),
-      name: new URL(normalizedUrl).hostname,
+      name: displayName.trim() || hostname,
       url: normalizedUrl,
       username: username.trim(),
       password: password.trim(),
@@ -104,6 +147,23 @@ export function LoginPage() {
     }
   };
 
+  if (autoConnecting && servers.length > 0) {
+    const server = [...servers].sort((a, b) => (b.lastConnected ?? 0) - (a.lastConnected ?? 0))[0];
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-4xl font-bold text-white mb-2">TvX</h1>
+          <p className="text-gray-400 mb-8">IPTV Client</p>
+          <div className="bg-gray-800 rounded-xl shadow-2xl p-8">
+            <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white font-medium">Connecting to {server.name}…</p>
+            <p className="text-sm text-gray-400 mt-1">Using saved credentials</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -111,6 +171,12 @@ export function LoginPage() {
           <h1 className="text-4xl font-bold text-white mb-2">TvX</h1>
           <p className="text-gray-400">IPTV Client</p>
         </div>
+
+        {autoConnectError && (
+          <div className="mb-4 p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-sm text-amber-200">
+            Could not connect with saved server. Sign in below.
+          </div>
+        )}
 
         <div className="bg-gray-800 rounded-xl shadow-2xl p-6">
           {servers.length > 0 && (
@@ -149,8 +215,20 @@ export function LoginPage() {
                 id="serverUrl"
                 type="text"
                 value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
+                onChange={(e) => handleServerUrlChange(e.target.value)}
                 placeholder="http://example.com:8080"
+                className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                disabled={status === 'connecting'}
+              />
+            </div>
+            <div>
+              <label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-1">Display name</label>
+              <input
+                id="displayName"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="e.g. My IPTV (shown instead of URL)"
                 className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                 disabled={status === 'connecting'}
               />
