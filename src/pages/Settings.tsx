@@ -1,10 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
 import { useSettingsStore, useRefreshStore } from '../store';
 import type { RefreshStats } from '../store';
 import { GroupManager } from '../components/GroupManager';
-import { getApi } from '../api';
+import { getApi, initApi, testConnection, XtreamApiError } from '../api';
+import { normalizeServerUrl, generateId } from '../utils';
 import type { ContentType } from '../types';
+import type { ServerConnection } from '../types';
 
 function getCacheStats(serverId: string): RefreshStats {
   const cache = useSettingsStore.getState().contentCache[serverId];
@@ -126,10 +129,21 @@ async function runFullRefresh(serverId: string, visibleOnly: boolean) {
 }
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [visibleOnly, setVisibleOnly] = useState(false);
-  const { currentServer } = useAppStore();
-  const { preferences, setPreferences, servers, removeServer } = useSettingsStore();
+  const [newServerUrl, setNewServerUrl] = useState('');
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [addServerStatus, setAddServerStatus] = useState<'idle' | 'connecting' | 'error'>('idle');
+  const [addServerError, setAddServerError] = useState('');
+  const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
+  const [editingNameServerId, setEditingNameServerId] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+
+  const { currentServer, setCurrentServer, setAuthInfo, setConnected } = useAppStore();
+  const { preferences, setPreferences, servers, addServer, updateServer, removeServer } = useSettingsStore();
   const { isRefreshing, progress, percent, stats, requestStop } = useRefreshStore();
 
   const serverId = currentServer?.id || '';
@@ -150,6 +164,79 @@ export function SettingsPage() {
     if (!serverId || isRefreshing) return;
     runFullRefresh(serverId, visibleOnly);
   }, [serverId, isRefreshing, visibleOnly]);
+
+  const handleAddServer = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = newServerUrl.trim();
+    const username = newUsername.trim();
+    const password = newPassword.trim();
+    if (!url || !username || !password) return;
+    setAddServerStatus('connecting');
+    setAddServerError('');
+    const normalizedUrl = normalizeServerUrl(url);
+    const hostname = new URL(normalizedUrl).hostname;
+    const serverConnection: ServerConnection = {
+      id: generateId(),
+      name: newDisplayName.trim() || hostname,
+      url: normalizedUrl,
+      username,
+      password,
+      lastConnected: null,
+    };
+    try {
+      await testConnection(serverConnection);
+      serverConnection.lastConnected = Date.now();
+      addServer(serverConnection);
+      setNewServerUrl('');
+      setNewDisplayName('');
+      setNewUsername('');
+      setNewPassword('');
+      setAddServerStatus('idle');
+    } catch (err) {
+      setAddServerStatus('error');
+      if (err instanceof XtreamApiError) {
+        setAddServerError(err.isTimeout ? 'Connection timeout.' : err.isNetworkError ? 'Network error.' : err.message);
+      } else {
+        setAddServerError('Connection failed.');
+      }
+    }
+  }, [newServerUrl, newDisplayName, newUsername, newPassword, addServer]);
+
+  const handleStartEditName = (server: ServerConnection) => {
+    setEditingNameServerId(server.id);
+    setEditingNameValue(server.name);
+  };
+  const handleSaveEditName = () => {
+    if (!editingNameServerId || !editingNameValue.trim()) {
+      setEditingNameServerId(null);
+      return;
+    }
+    const server = servers.find((s) => s.id === editingNameServerId);
+    if (server) {
+      updateServer({ ...server, name: editingNameValue.trim() });
+      if (currentServer?.id === editingNameServerId) {
+        useAppStore.getState().setCurrentServer({ ...currentServer, name: editingNameValue.trim() });
+      }
+    }
+    setEditingNameServerId(null);
+    setEditingNameValue('');
+  };
+
+  const handleConnectServer = useCallback(async (server: ServerConnection) => {
+    setConnectingServerId(server.id);
+    try {
+      const authResponse = await testConnection(server);
+      const updated = { ...server, lastConnected: Date.now() };
+      updateServer(updated);
+      initApi(updated);
+      setCurrentServer(updated);
+      setAuthInfo(authResponse);
+      setConnected(true);
+      navigate('/live', { replace: true });
+    } catch {
+      setConnectingServerId(null);
+    }
+  }, [updateServer, setCurrentServer, setAuthInfo, setConnected, navigate]);
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -327,37 +414,159 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {/* Saved Servers */}
+      {/* API endpoints: Add new + Saved list */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-white mb-4">Saved Servers</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">API Endpoints</h2>
+
+        {/* Add new endpoint */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-4">
+          <p className="text-white font-medium mb-3">Add new Xtream API endpoint</p>
+          <form onSubmit={handleAddServer} className="space-y-3">
+            <input
+              type="text"
+              value={newServerUrl}
+              onChange={(e) => {
+                const v = e.target.value;
+                setNewServerUrl(v);
+                try {
+                  const norm = normalizeServerUrl(v);
+                  const host = new URL(norm).hostname;
+                  if (host && !newDisplayName) setNewDisplayName(host);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              placeholder="Server URL (e.g. http://example.com:8080)"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+              disabled={addServerStatus === 'connecting'}
+            />
+            <input
+              type="text"
+              value={newDisplayName}
+              onChange={(e) => setNewDisplayName(e.target.value)}
+              placeholder="Display name (e.g. My IPTV — shown instead of URL)"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+              disabled={addServerStatus === 'connecting'}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Username"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                disabled={addServerStatus === 'connecting'}
+              />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                disabled={addServerStatus === 'connecting'}
+              />
+            </div>
+            {addServerStatus === 'error' && addServerError && (
+              <p className="text-sm text-red-400">{addServerError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={!newServerUrl.trim() || !newUsername.trim() || !newPassword.trim() || addServerStatus === 'connecting'}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              {addServerStatus === 'connecting' ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Test & save…
+                </>
+              ) : (
+                'Test & save'
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Saved servers */}
         <div className="bg-gray-800 rounded-lg p-4">
+          <p className="text-white font-medium mb-3">Saved servers</p>
           {servers.length > 0 ? (
             <div className="space-y-3">
               {servers.map((server) => (
-                <div key={server.id} className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
-                  <div>
-                    <p className="text-white font-medium">{server.name}</p>
-                    <p className="text-sm text-gray-400">{server.url}</p>
+                <div key={server.id} className="flex items-center justify-between gap-3 p-3 bg-gray-700 rounded-lg flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    {editingNameServerId === server.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editingNameValue}
+                          onChange={(e) => setEditingNameValue(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveEditName()}
+                          onBlur={handleSaveEditName}
+                          className="flex-1 min-w-0 px-2 py-1 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveEditName}
+                          className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-white font-medium">{server.name}</p>
+                    )}
+                    <p className="text-sm text-gray-400 truncate">{server.url}</p>
                     {server.lastConnected && (
                       <p className="text-xs text-gray-500">
                         Last connected: {new Date(server.lastConnected).toLocaleDateString()}
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => removeServer(server.id)}
-                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
-                    title="Remove server"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {editingNameServerId !== server.id && (
+                      <button
+                        onClick={() => handleStartEditName(server)}
+                        className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-lg transition-colors"
+                        title="Edit display name"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleConnectServer(server)}
+                      disabled={connectingServerId !== null || currentServer?.id === server.id}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-default text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                      title={currentServer?.id === server.id ? 'Current server' : 'Connect to this server'}
+                    >
+                      {connectingServerId === server.id ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Connecting…
+                        </>
+                      ) : currentServer?.id === server.id ? (
+                        'Current'
+                      ) : (
+                        'Connect'
+                      )}
+                    </button>
+                    <button
+                      onClick={() => removeServer(server.id)}
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
+                      title="Remove server"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-400 text-center py-4">No saved servers</p>
+            <p className="text-gray-400 text-center py-4">No saved servers. Add one above or sign in on the Login page.</p>
           )}
         </div>
       </section>

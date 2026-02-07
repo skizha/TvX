@@ -5,9 +5,19 @@ import type { Channel, Movie, Series, ContentType } from '../types';
 
 type TabType = 'all' | ContentType;
 
+function mergeWithCache<T extends { id: number }>(
+  fromApp: T[],
+  fromCache: T[] | null
+): T[] {
+  const byId = new Map<number, T>();
+  (fromCache || []).forEach((item) => byId.set(item.id, item));
+  fromApp.forEach((item) => byId.set(item.id, item));
+  return Array.from(byId.values());
+}
+
 export function FavoritesPage() {
   const { channels, movies, series, categories, currentServer } = useAppStore();
-  const { favorites, groupVisibility, customGroups } = useSettingsStore();
+  const { favorites, groupVisibility, customGroups, getAllCachedContent } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<TabType>('all');
 
   const serverId = currentServer?.id || '';
@@ -39,12 +49,30 @@ export function FavoritesPage() {
     return inVisibleCategory || inVisibleCustomGroup;
   };
 
+  // Resolve items from app store + persisted cache so favorites show across sessions
   const favoriteItems = useMemo(() => {
-    const liveItems = channels
+    const cachedLive = serverId ? getAllCachedContent(serverId, 'live') : null;
+    const cachedMovies = serverId ? getAllCachedContent(serverId, 'movie') : null;
+    const cachedSeries = serverId ? getAllCachedContent(serverId, 'series') : null;
+
+    const liveMerged = mergeWithCache(
+      channels,
+      cachedLive as Channel[] | null
+    );
+    const movieMerged = mergeWithCache(
+      movies,
+      cachedMovies as Movie[] | null
+    );
+    const seriesMerged = mergeWithCache(
+      series,
+      cachedSeries as Series[] | null
+    );
+
+    const liveItems = liveMerged
       .filter((c) => serverFavorites.live.includes(c.id) && isInVisibleGroup('live', c));
-    const movieItems = movies
+    const movieItems = movieMerged
       .filter((m) => serverFavorites.movie.includes(m.id) && isInVisibleGroup('movie', m));
-    const seriesItems = series
+    const seriesItems = seriesMerged
       .filter((s) => serverFavorites.series.includes(s.id) && isInVisibleGroup('series', s));
 
     return {
@@ -53,7 +81,7 @@ export function FavoritesPage() {
       series: seriesItems,
       all: [...liveItems, ...movieItems, ...seriesItems],
     };
-  }, [channels, movies, series, serverFavorites, visibleCategoryIds, visibleCustomGroupIds, serverGroups]);
+  }, [channels, movies, series, serverId, serverFavorites, getAllCachedContent, visibleCategoryIds, visibleCustomGroupIds, serverGroups]);
 
   const tabs: { key: TabType; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: favoriteItems.all.length },
