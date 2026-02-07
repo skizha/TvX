@@ -357,18 +357,12 @@ function CategoryCard({ category, onClick, isCustomGroup }: { category: Extended
   return (
     <button
       onClick={onClick}
-      className="group relative bg-gradient-to-br from-[#1a1a2e] to-[#16161f] rounded-xl p-4 text-left hover:from-blue-900/30 hover:to-purple-900/30 transition-all duration-300 border border-gray-800/50 hover:border-blue-500/50 flex items-center gap-3"
+      className={`group relative bg-gradient-to-br from-[#1a1a2e] to-[#16161f] rounded-xl p-4 text-left transition-all duration-300 border flex items-center gap-3 ${isCustomGroup ? 'border-amber-900/40 hover:from-amber-900/20 hover:to-yellow-900/20 hover:border-amber-500/50' : 'border-gray-800/50 hover:from-blue-900/30 hover:to-purple-900/30 hover:border-blue-500/50'}`}
     >
-      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${isCustomGroup ? 'from-purple-500/20 to-pink-500/20 group-hover:from-purple-500/30 group-hover:to-pink-500/30' : 'from-blue-500/20 to-purple-500/20 group-hover:from-blue-500/30 group-hover:to-purple-500/30'} flex items-center justify-center flex-shrink-0 transition-colors`}>
-        {isCustomGroup ? (
-          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-        )}
+      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center flex-shrink-0 transition-colors ${isCustomGroup ? 'from-amber-500/25 to-yellow-500/25 group-hover:from-amber-500/40 group-hover:to-yellow-500/40' : 'from-blue-500/20 to-purple-500/20 group-hover:from-blue-500/30 group-hover:to-purple-500/30'}`}>
+        <svg className={`w-5 h-5 ${isCustomGroup ? 'text-amber-400' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
       </div>
       <h3 className="font-semibold text-white truncate">{category.name}</h3>
     </button>
