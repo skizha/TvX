@@ -41,12 +41,17 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
           await invoke('open_video_window', {
             title: item.name,
             streamUrl,
+            startPositionSecs: undefined,
+            serverId: serverId || undefined,
+            contentType: 'live',
+            contentId: item.id,
           });
           if (serverId) {
             addToWatchHistory(serverId, {
               contentType: 'live',
               contentId: item.id,
               timestamp: Date.now(),
+              title: item.name,
             });
           }
         } catch (err) {
@@ -59,12 +64,18 @@ export function ContentGrid({ type, items, loading, onItemClick }: ContentGridPr
           await invoke('open_video_window', {
             title: item.name,
             streamUrl,
+            startPositionSecs: undefined,
+            serverId: serverId || undefined,
+            contentType: 'movie',
+            contentId: item.id,
           });
           if (serverId) {
             addToWatchHistory(serverId, {
               contentType: 'movie',
               contentId: item.id,
               timestamp: Date.now(),
+              title: item.name,
+              extension: ext,
             });
           }
         } catch (err) {

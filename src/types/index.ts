@@ -110,6 +110,8 @@ export interface WatchHistoryEntry {
   contentId: number;
   timestamp: number;
   progress?: number; // For VOD/Series - playback position in seconds
+  title?: string;
+  extension?: string;
 }
 
 // API Response types

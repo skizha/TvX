@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { listen } from '@tauri-apps/api/event';
 import { Layout } from './components/Layout';
-import { useAppStore } from './store';
+import { useAppStore, useSettingsStore } from './store';
+import type { ContentType } from './types';
 import './App.css';
 
 const LoginPage = lazy(() => import('./pages/Login').then((m) => ({ default: m.LoginPage })));
@@ -13,6 +15,7 @@ const PlayerPage = lazy(() => import('./pages/Player').then((m) => ({ default: m
 const VideoWindowPage = lazy(() => import('./pages/VideoWindow').then((m) => ({ default: m.VideoWindowPage })));
 const SearchPage = lazy(() => import('./pages/Search').then((m) => ({ default: m.SearchPage })));
 const FavoritesPage = lazy(() => import('./pages/Favorites').then((m) => ({ default: m.FavoritesPage })));
+const WatchHistoryPage = lazy(() => import('./pages/WatchHistory').then((m) => ({ default: m.WatchHistoryPage })));
 const SettingsPage = lazy(() => import('./pages/Settings').then((m) => ({ default: m.SettingsPage })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -34,6 +37,26 @@ function PageFallback() {
 }
 
 function App() {
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ server_id: string; content_type: string; content_id: number; progress_secs: number }>(
+      'playback-progress',
+      (e) => {
+        useSettingsStore.getState().updateWatchHistoryProgress(
+          e.payload.server_id,
+          e.payload.content_type as ContentType,
+          e.payload.content_id,
+          e.payload.progress_secs
+        );
+      }
+    ).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<PageFallback />}>
@@ -56,6 +79,7 @@ function App() {
             <Route path="/detail/:type/:id" element={<DetailPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/favorites" element={<FavoritesPage />} />
+            <Route path="/watch-history" element={<WatchHistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

@@ -7,4 +7,5 @@ export * from './Player';
 export * from './VideoWindow';
 export * from './Search';
 export * from './Favorites';
+export * from './WatchHistory';
 export * from './Settings';

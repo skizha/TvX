@@ -1,18 +1,57 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
 import Hls from 'hls.js';
+
+const PROGRESS_REPORT_INTERVAL_MS = 5000;
 
 export function VideoWindowPage() {
   const [searchParams] = useSearchParams();
   const url = searchParams.get('url');
+  const startSecs = Math.max(0, Number(searchParams.get('t')) || 0);
+  const serverId = searchParams.get('serverId') ?? '';
+  const contentType = searchParams.get('contentType') ?? '';
+  const contentIdParam = searchParams.get('contentId');
+  const contentId = contentIdParam ? parseInt(contentIdParam, 10) : 0;
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasSeekedRef = useRef(false);
 
   const [status, setStatus] = useState<'loading' | 'playing' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showUnmuteHint, setShowUnmuteHint] = useState(true);
 
   const isHls = url != null && (url.includes('m3u8') || url.endsWith('.m3u8'));
+  const canReportProgress = Boolean(serverId && contentType && contentId > 0);
+
+  const reportProgress = useCallback(
+    (currentTime: number) => {
+      if (!canReportProgress || currentTime <= 0) return;
+      invoke('report_playback_progress', {
+        serverId,
+        contentType,
+        contentId,
+        progressSecs: currentTime,
+      }).catch(() => {});
+    },
+    [canReportProgress, serverId, contentType, contentId]
+  );
+
+  const seekToStart = useCallback(
+    (video: HTMLVideoElement) => {
+      if (startSecs <= 0 || hasSeekedRef.current) return;
+      if (Number.isFinite(video.duration) && video.readyState >= 2) {
+        const t = Math.min(startSecs, video.duration - 1);
+        if (t > 0) {
+          video.currentTime = t;
+          hasSeekedRef.current = true;
+        }
+      }
+    },
+    [startSecs]
+  );
 
   useEffect(() => {
     if (!url || !videoRef.current) return;
@@ -25,6 +64,8 @@ export function VideoWindowPage() {
       setStatus('error');
       setErrorMessage(String(msg));
     };
+    const onLoadedMetadata = () => seekToStart(video);
+    const onTimeUpdate = () => seekToStart(video);
 
     if (isHls && Hls.isSupported()) {
       const hls = new Hls({
@@ -49,12 +90,16 @@ export function VideoWindowPage() {
 
       video.addEventListener('playing', onPlaying);
       video.addEventListener('error', onError);
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('timeupdate', onTimeUpdate);
 
       return () => {
         hls.destroy();
         hlsRef.current = null;
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('error', onError);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('timeupdate', onTimeUpdate);
       };
     }
 
@@ -62,9 +107,13 @@ export function VideoWindowPage() {
       video.src = url;
       video.addEventListener('playing', onPlaying);
       video.addEventListener('error', onError);
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('timeupdate', onTimeUpdate);
       return () => {
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('error', onError);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('timeupdate', onTimeUpdate);
       };
     }
 
@@ -72,16 +121,45 @@ export function VideoWindowPage() {
       video.src = url;
       video.addEventListener('playing', onPlaying);
       video.addEventListener('error', onError);
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('timeupdate', onTimeUpdate);
       return () => {
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('error', onError);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('timeupdate', onTimeUpdate);
       };
     }
 
     setStatus('error');
     setErrorMessage('HLS is not supported in this browser.');
     return undefined;
-  }, [url, isHls]);
+  }, [url, isHls, seekToStart]);
+
+  useEffect(() => {
+    if (!canReportProgress || !videoRef.current) return;
+
+    progressIntervalRef.current = setInterval(() => {
+      const v = videoRef.current;
+      if (v && !v.paused && Number.isFinite(v.currentTime)) reportProgress(v.currentTime);
+    }, PROGRESS_REPORT_INTERVAL_MS);
+
+    const onBeforeUnload = () => {
+      const v = videoRef.current;
+      if (v && Number.isFinite(v.currentTime)) reportProgress(v.currentTime);
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      const v = videoRef.current;
+      if (v && Number.isFinite(v.currentTime)) reportProgress(v.currentTime);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [canReportProgress, reportProgress]);
 
   if (!url) {
     return (
