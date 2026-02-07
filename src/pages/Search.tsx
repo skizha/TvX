@@ -1,25 +1,46 @@
 import { useState, useMemo } from 'react';
-import { useAppStore } from '../store';
+import { useAppStore, useSettingsStore } from '../store';
 import { ContentGrid } from '../components/ContentGrid';
 import type { ContentType, Channel, Movie, Series } from '../types';
 
 type TabType = 'all' | ContentType;
 
+function mergeWithCache<T extends { id: number }>(
+  fromApp: T[],
+  fromCache: T[] | null
+): T[] {
+  const byId = new Map<number, T>();
+  (fromCache || []).forEach((item) => byId.set(item.id, item));
+  fromApp.forEach((item) => byId.set(item.id, item));
+  return Array.from(byId.values());
+}
+
 export function SearchPage() {
-  const { channels, movies, series } = useAppStore();
+  const { channels, movies, series, currentServer } = useAppStore();
+  const { getAllCachedContent } = useSettingsStore();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('all');
+
+  const serverId = currentServer?.id || '';
 
   const results = useMemo(() => {
     if (!query.trim()) {
       return { live: [], movie: [], series: [], all: [] };
     }
 
+    const cachedLive = serverId ? getAllCachedContent(serverId, 'live') : null;
+    const cachedMovies = serverId ? getAllCachedContent(serverId, 'movie') : null;
+    const cachedSeries = serverId ? getAllCachedContent(serverId, 'series') : null;
+
+    const liveMerged = mergeWithCache(channels, cachedLive as Channel[] | null);
+    const movieMerged = mergeWithCache(movies, cachedMovies as Movie[] | null);
+    const seriesMerged = mergeWithCache(series, cachedSeries as Series[] | null);
+
     const q = query.toLowerCase();
 
-    const liveResults = channels.filter((c) => c.name.toLowerCase().includes(q));
-    const movieResults = movies.filter((m) => m.name.toLowerCase().includes(q));
-    const seriesResults = series.filter((s) => s.name.toLowerCase().includes(q));
+    const liveResults = liveMerged.filter((c) => c.name.toLowerCase().includes(q));
+    const movieResults = movieMerged.filter((m) => m.name.toLowerCase().includes(q));
+    const seriesResults = seriesMerged.filter((s) => s.name.toLowerCase().includes(q));
 
     return {
       live: liveResults,
@@ -27,7 +48,7 @@ export function SearchPage() {
       series: seriesResults,
       all: [...liveResults, ...movieResults, ...seriesResults] as (Channel | Movie | Series)[],
     };
-  }, [query, channels, movies, series]);
+  }, [query, channels, movies, series, serverId, getAllCachedContent]);
 
   const tabs: { key: TabType; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: results.all.length },
