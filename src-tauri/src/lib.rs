@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::Manager;
+use tauri::Emitter;
 
 /// Tries to open the given URL in VLC. Tries common install paths on Windows.
 #[tauri::command]
@@ -45,11 +45,16 @@ fn open_in_vlc(url: String) -> Result<(), String> {
 }
 
 /// Opens a new Tauri window with the video player. Async to avoid Windows deadlock.
+/// Optional: start_position_secs (resume), server_id, content_type, content_id (for saving progress).
 #[tauri::command]
 async fn open_video_window(
     app: tauri::AppHandle,
     title: String,
     stream_url: String,
+    start_position_secs: Option<f64>,
+    server_id: Option<String>,
+    content_type: Option<String>,
+    content_id: Option<i64>,
 ) -> Result<(), String> {
     let label = format!(
         "video-{}",
@@ -59,8 +64,21 @@ async fn open_video_window(
             .as_millis()
     );
     let encoded = urlencoding::encode(&stream_url);
-    // Path relative to app URL (dev server or tauri://localhost in prod)
-    let path = format!("video-window?url={}", encoded);
+    let mut path = format!("video-window?url={}", encoded);
+    if let Some(t) = start_position_secs {
+        if t > 0.0 {
+            path.push_str(&format!("&t={}", (t as i64).max(0)));
+        }
+    }
+    if let Some(ref id) = server_id {
+        path.push_str(&format!("&serverId={}", urlencoding::encode(id)));
+    }
+    if let Some(ref ct) = content_type {
+        path.push_str(&format!("&contentType={}", urlencoding::encode(ct)));
+    }
+    if let Some(id) = content_id {
+        path.push_str(&format!("&contentId={}", id));
+    }
     let url = tauri::WebviewUrl::App(PathBuf::from(path));
     tauri::WebviewWindowBuilder::new(&app, &label, url)
         .title(title)
@@ -70,11 +88,39 @@ async fn open_video_window(
     Ok(())
 }
 
+/// Report playback position from the video window so the main app can persist it.
+#[tauri::command]
+fn report_playback_progress(
+    app: tauri::AppHandle,
+    server_id: String,
+    content_type: String,
+    content_id: i64,
+    progress_secs: f64,
+) -> Result<(), String> {
+    #[derive(serde::Serialize, Clone)]
+    struct Payload {
+        server_id: String,
+        content_type: String,
+        content_id: i64,
+        progress_secs: f64,
+    }
+    let payload = Payload {
+        server_id,
+        content_type,
+        content_id,
+        progress_secs,
+    };
+    if let Err(e) = app.emit("playback-progress", payload) {
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![open_video_window, open_in_vlc])
+        .invoke_handler(tauri::generate_handler![open_video_window, open_in_vlc, report_playback_progress])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

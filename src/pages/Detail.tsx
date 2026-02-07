@@ -77,12 +77,22 @@ export function DetailPage() {
       return;
     }
     try {
-      await invoke('open_video_window', { title, streamUrl });
+      const contentIdForHistory = contentType === 'movie' ? itemId : episodeId!;
+      await invoke('open_video_window', {
+        title,
+        streamUrl,
+        startPositionSecs: undefined,
+        serverId: serverId || undefined,
+        contentType,
+        contentId: contentIdForHistory,
+      });
       if (serverId) {
         addToWatchHistory(serverId, {
           contentType,
-          contentId: contentType === 'movie' ? itemId : episodeId!,
+          contentId: contentIdForHistory,
           timestamp: Date.now(),
+          title,
+          extension: contentType === 'movie' ? (item as Movie)?.extension : episodes.find((e) => e.id === episodeId)?.extension,
         });
       }
     } catch (err) {

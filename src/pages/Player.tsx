@@ -55,14 +55,16 @@ export function PlayerPage() {
   })();
 
   useEffect(() => {
-    if (serverId && contentType && itemId) {
+    if (serverId && contentType && itemId && contentInfo?.name) {
       addToWatchHistory(serverId, {
         contentType,
         contentId: itemId,
         timestamp: Date.now(),
+        title: contentInfo.name,
+        extension: contentType === 'movie' && movie ? movie.extension : undefined,
       });
     }
-  }, [serverId, contentType, itemId, addToWatchHistory]);
+  }, [serverId, contentType, itemId, contentInfo?.name, movie, addToWatchHistory]);
 
   const handleOpenInNewWindow = async () => {
     if (!streamUrl) return;
@@ -71,6 +73,10 @@ export function PlayerPage() {
       await invoke('open_video_window', {
         title: contentInfo?.name || 'Stream',
         streamUrl,
+        startPositionSecs: undefined,
+        serverId: serverId || undefined,
+        contentType,
+        contentId: itemId,
       });
     } catch (err) {
       console.error('Failed to open video window:', err);

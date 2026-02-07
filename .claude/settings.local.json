@@ -19,7 +19,10 @@
       "Bash(npm ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(gh pr create --title \"Group management, refresh buttons, and full server refresh\" --body \"$\\(cat <<''EOF''\n## Summary\n- **Custom groups**: Create, manage, and toggle visibility of categories per tab \\(Live/Movies/Series\\)\n- **Per-tab refresh buttons**: Inline refresh button on each content page that clears cache for that type and re-fetches from server, with category count in header\n- **Full server refresh in Settings**: Clears all local cache and re-fetches every category + all content items, with progress bar, stop button, visible-only toggle, and cache statistics \\(item counts per type\\)\n- **Background refresh**: Refresh runs in a zustand store so it survives navigation — come back to Settings to see progress or stop it\n- Updated icons, layout improvements, and build config fixes\n\n## Test plan\n- [ ] Click refresh on each tab \\(Live, Movies, Series\\) — cache clears, categories reload with spinner\n- [ ] Category count updates in header after refresh\n- [ ] Refresh while inside a category — returns to category list and refreshes\n- [ ] Other tabs'' cache is unaffected by refreshing one tab\n- [ ] Settings > Data & Cache > Refresh All — full refresh with progress bar\n- [ ] Navigate away during refresh, come back — progress still visible\n- [ ] Click Stop during refresh — stops gracefully, keeps partial cache\n- [ ] Toggle \"Only refresh visible groups\" — skips hidden categories during refresh\n- [ ] Cache stats show correct item counts after refresh\nEOF\n\\)\" --base master)"
     ]
   }
 }

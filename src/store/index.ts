@@ -167,6 +167,7 @@ interface SettingsState {
   addFavorite: (serverId: string, type: ContentType, id: number) => void;
   removeFavorite: (serverId: string, type: ContentType, id: number) => void;
   addToWatchHistory: (serverId: string, entry: WatchHistoryEntry) => void;
+  updateWatchHistoryProgress: (serverId: string, contentType: ContentType, contentId: number, progressSecs: number) => void;
   clearWatchHistory: (serverId: string) => void;
 
   // Custom group actions
@@ -291,15 +292,30 @@ export const useSettingsStore = create<SettingsState>()(
       addToWatchHistory: (serverId, entry) =>
         set((state) => {
           const history = state.watchHistory[serverId] || [];
-          // Remove existing entry for same content
           const filtered = history.filter(
             (h) => !(h.contentType === entry.contentType && h.contentId === entry.contentId)
           );
-          // Add new entry at start, limit to 100 items
           return {
             watchHistory: {
               ...state.watchHistory,
               [serverId]: [entry, ...filtered].slice(0, 100),
+            },
+          };
+        }),
+
+      updateWatchHistoryProgress: (serverId, contentType, contentId, progressSecs) =>
+        set((state) => {
+          const history = state.watchHistory[serverId] || [];
+          const idx = history.findIndex(
+            (h) => h.contentType === contentType && h.contentId === contentId
+          );
+          if (idx < 0) return state;
+          const next = [...history];
+          next[idx] = { ...next[idx], progress: Math.floor(progressSecs) };
+          return {
+            watchHistory: {
+              ...state.watchHistory,
+              [serverId]: next,
             },
           };
         }),
